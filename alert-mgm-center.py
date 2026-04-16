@@ -149,291 +149,295 @@ with st.sidebar:
 #              USER VIEW
 # ==========================================
 if app_mode == "User View":
-    st.markdown('<div class="main-header">Alert Management Center</div>', unsafe_allow_html=True)
-    st.markdown('<div class="sub-header">Digitalize. Streamline. Transform. | Monitor manufacturing performance and tooling conditions.</div>', unsafe_allow_html=True)
-
-    left_panel, right_panel = st.columns([1, 3], gap="large")
     
-    with left_panel:
-        st.markdown("### Export Assigned Alerts")
-        st.caption("Export your configured alerts summary or send it directly via email.")
+    # Top Header & Export Button
+    header_col, export_col = st.columns([5, 1])
+    
+    with header_col:
+        st.markdown('<div class="main-header">Alert Management Center</div>', unsafe_allow_html=True)
+        st.markdown('<div class="sub-header">Digitalize. Streamline. Transform. | Monitor manufacturing performance and tooling conditions.</div>', unsafe_allow_html=True)
         
-        # Comprehensive Data Design simulating the user's currently assigned alerts
-        dummy_alerts_df = pd.DataFrame({
-            "Alert ID": ["ALT-1024", "ALT-1025", "ALT-1026", "ALT-1027", "ALT-1028"],
-            "Alert Type": ["Cycle Time", "Run Rate", "Capacity Risk", "Tooling EOL", "Operation Status"],
-            "OEM Division": ["Div A", "All", "Div B", "All", "Div C"],
-            "Supplier": ["Supplier X", "All", "Supplier Y", "Supplier Z", "All"],
-            "Plant": ["Plant 1", "All", "Plant 2", "All", "Plant 3"],
-            "Tooling / Part": ["Tool_A", "All", "Product Alpha", "Part 101", "Tool_C"],
-            "Level 1 Condition": ["0% ≤ dev ≤ 5%", "80% ≤ RR ≤ 100%", "0% ≤ loss ≤ 5%", "80% ≤ shots ≤ 90%", "Sensor Offline"],
-            "Level 2 Condition": ["5% < dev ≤ 15%", "50% ≤ RR < 80%", "5% < loss ≤ 15%", "90% < shots ≤ 100%", "Inactive/Detached"],
-            "Frequency": ["Daily", "Weekly", "Monthly", "Weekly", "Real time"],
-            "Status": ["Active", "Active", "Inactive", "Active", "Active"],
-            "Last Modified": ["2026-04-10", "2026-04-12", "2026-04-14", "2026-04-15", "2026-04-16"]
-        })
+    with export_col:
+        # Add a little top margin to align with the header visually
+        st.write("")
+        st.write("")
         
-        with st.expander("Preview Export Data"):
-            st.dataframe(dummy_alerts_df, use_container_width=True)
+        with st.popover("📥 Export Alerts", use_container_width=True):
+            st.caption("Export or email your configured alerts summary.")
+            
+            # Comprehensive Data Design simulating the user's currently assigned alerts
+            dummy_alerts_df = pd.DataFrame({
+                "Alert ID": ["ALT-1024", "ALT-1025", "ALT-1026", "ALT-1027", "ALT-1028"],
+                "Alert Type": ["Cycle Time", "Run Rate", "Capacity Risk", "Tooling EOL", "Operation Status"],
+                "OEM Division": ["Div A", "All", "Div B", "All", "Div C"],
+                "Supplier": ["Supplier X", "All", "Supplier Y", "Supplier Z", "All"],
+                "Plant": ["Plant 1", "All", "Plant 2", "All", "Plant 3"],
+                "Tooling / Part": ["Tool_A", "All", "Product Alpha", "Part 101", "Tool_C"],
+                "Level 1 Condition": ["0% ≤ dev ≤ 5%", "80% ≤ RR ≤ 100%", "0% ≤ loss ≤ 5%", "80% ≤ shots ≤ 90%", "Sensor Offline"],
+                "Level 2 Condition": ["5% < dev ≤ 15%", "50% ≤ RR < 80%", "5% < loss ≤ 15%", "90% < shots ≤ 100%", "Inactive/Detached"],
+                "Frequency": ["Daily", "Weekly", "Monthly", "Weekly", "Real time"],
+                "Status": ["Active", "Active", "Inactive", "Active", "Active"],
+                "Last Modified": ["2026-04-10", "2026-04-12", "2026-04-14", "2026-04-15", "2026-04-16"]
+            })
+            
+            with st.expander("Preview Data"):
+                st.dataframe(dummy_alerts_df, use_container_width=True)
 
-        export_format = st.radio("Select Export Format", ["CSV", "PDF"], horizontal=True)
-        
-        if export_format == "CSV":
-            export_data = dummy_alerts_df.to_csv(index=False).encode('utf-8')
-            file_extension = "csv"
-            mime_type = "text/csv"
-        else:
-            # Generate PDF using the new built-in pure Python function!
-            export_data = generate_pure_python_pdf(dummy_alerts_df)
-            file_extension = "pdf"
-            mime_type = "application/pdf"
+            export_format = st.radio("Format", ["CSV", "PDF"], horizontal=True, label_visibility="collapsed")
             
-        st.download_button(
-            label=f"Download {export_format} Report",
-            data=export_data,
-            file_name=f"assigned_alerts_{datetime.datetime.now().strftime('%Y%m%d')}.{file_extension}",
-            mime=mime_type,
-            use_container_width=True
-        )
-        
-        with st.popover("Send to Email", use_container_width=True):
-            st.write("Send report to email")
-            email_input = st.text_input("Email Address", value="admin.plant@emoldino.com")
+            if export_format == "CSV":
+                export_data = dummy_alerts_df.to_csv(index=False).encode('utf-8')
+                file_extension = "csv"
+                mime_type = "text/csv"
+            else:
+                # Generate PDF using the built-in pure Python function
+                export_data = generate_pure_python_pdf(dummy_alerts_df)
+                file_extension = "pdf"
+                mime_type = "application/pdf"
+                
+            st.download_button(
+                label=f"⬇️ Download {export_format}",
+                data=export_data,
+                file_name=f"assigned_alerts_{datetime.datetime.now().strftime('%Y%m%d')}.{file_extension}",
+                mime=mime_type,
+                use_container_width=True
+            )
             
-            if 'file_extension' in locals():
-                st.caption(f"Attachment: assigned_alerts.{file_extension}")
+            st.divider()
+            st.write("✉️ Send to Email")
+            email_input = st.text_input("Email Address", value="admin.plant@emoldino.com", label_visibility="collapsed")
             
             if st.button("Send Now", type="primary", use_container_width=True):
-                st.success(f"Report successfully sent to {email_input}!")
+                st.success(f"Sent to {email_input}!")
 
-    with right_panel:
-        tab1, tab2, tab3, tab4, tab5 = st.tabs([
-            "Cycle Time", 
-            "Run Rate", 
-            "Capacity Risk", 
-            "Tooling End of Life", 
-            "Operation Status"
-        ])
+    # Tabs now take full width
+    tab1, tab2, tab3, tab4, tab5 = st.tabs([
+        "Cycle Time", 
+        "Run Rate", 
+        "Capacity Risk", 
+        "Tooling End of Life", 
+        "Operation Status"
+    ])
 
-        # --- 1. CYCLE TIME ---
-        with tab1:
-            st.subheader("Cycle Time Alerts")
-            st.write("Alerts based on deviation from approved cycle time (ACT).")
-            
-            ct_enabled = st.toggle("Enable Cycle Time Alerts", value=True, key="ct_toggle")
-            
-            if ct_enabled:
-                with st.container(border=True):
-                    st.markdown("##### Configuration: Number of Levels")
-                    ct_num = st.number_input("How many alert levels do you want to configure?", min_value=1, max_value=5, value=2, key="ct_num_levels")
-                    
-                    st.markdown("##### Threshold Boundaries")
-                    st.write("Set the upper limit for each level. The system prevents overlapping to avoid errors.")
-                    
-                    ct_limits = []
-                    prev_val = 0
-                    ct_cols = st.columns(ct_num)
-                    
-                    for i in range(ct_num):
-                        with ct_cols[i]:
-                            val = st.number_input(f"Level {i+1} Upper Limit (%)", 
-                                                  min_value=prev_val + 1, 
-                                                  max_value=200, 
-                                                  value=prev_val + 5, 
-                                                  key=f"ct_limit_{i}")
-                            ct_limits.append(val)
-                            prev_val = val
-                    
-                    st.markdown("##### Alert Conditions Summary")
-                    ct_disp_cols = st.columns(ct_num)
-                    for i in range(ct_num):
-                        with ct_disp_cols[i]:
-                            lower = 0 if i == 0 else ct_limits[i-1]
-                            upper = ct_limits[i]
-                            op = "≤" if i == 0 else "<"
-                            txt = f"**Level {i+1}**\n\nTriggers when deviation is between **{lower}% and {upper}%**.\n\n`{lower}% {op} deviation ≤ {upper}%`"
-                            display_level_box(i, txt)
-                    
-                    st.divider()
-                    ct_freq = st.selectbox("Alert Frequency", ["Hourly", "Daily", "Weekly", "Monthly"], key="ct_freq")
-                    
-                if st.button("Save Cycle Time Settings", type="primary"):
-                    st.success("Cycle Time alert settings saved successfully for the selected filters!")
-
-        # --- 2. RUN RATE ---
-        with tab2:
-            st.subheader("Run Rate Alerts")
-            st.write("Alerts based on Run Rate Efficiency and Stability.")
-            
-            rr_enabled = st.toggle("Enable Run Rate Alerts", value=True, key="rr_toggle")
-            
-            if rr_enabled:
-                rr_condition = st.radio("Trigger Condition", ["Low Run Rate Efficiency", "Low Run Rate Stability"], horizontal=True)
+    # --- 1. CYCLE TIME ---
+    with tab1:
+        st.subheader("Cycle Time Alerts")
+        st.write("Alerts based on deviation from approved cycle time (ACT).")
+        
+        ct_enabled = st.toggle("Enable Cycle Time Alerts", value=True, key="ct_toggle")
+        
+        if ct_enabled:
+            with st.container(border=True):
+                st.markdown("##### Configuration: Number of Levels")
+                ct_num = st.number_input("How many alert levels do you want to configure?", min_value=1, max_value=5, value=2, key="ct_num_levels")
                 
-                with st.container(border=True):
-                    st.markdown("##### Configuration: Number of Levels")
-                    rr_num = st.number_input("How many alert levels do you want to configure?", min_value=1, max_value=5, value=2, key="rr_num_levels")
-                    
-                    st.markdown("##### Threshold Boundaries")
-                    st.write("Set the lower limit for each level as performance drops.")
-                    
-                    rr_limits = []
-                    prev_val = 100
-                    rr_cols = st.columns(rr_num)
-                    
-                    for i in range(rr_num):
-                        with rr_cols[i]:
-                            # Ensure the next level is lower than the previous level
-                            val = st.number_input(f"Level {i+1} Lower Limit (%)", 
-                                                  min_value=0, 
-                                                  max_value=prev_val - 1, 
-                                                  value=max(0, prev_val - 15), 
-                                                  key=f"rr_limit_{i}")
-                            rr_limits.append(val)
-                            prev_val = val
-                    
-                    st.markdown("##### Alert Conditions Summary")
-                    rr_disp_cols = st.columns(rr_num)
-                    for i in range(rr_num):
-                        with rr_disp_cols[i]:
-                            upper = 100 if i == 0 else rr_limits[i-1]
-                            lower = rr_limits[i]
-                            op = "≤" if i == 0 else "<"
-                            txt = f"**Level {i+1}**\n\nTriggers when rate drops between **{lower}% and {upper}%**.\n\n`{lower}% ≤ rate {op} {upper}%`"
-                            display_level_box(i, txt)
-
-                    st.divider()
-                    rr_freq = st.selectbox("Alert Frequency", ["Daily", "Weekly", "Monthly"], key="rr_freq")
-                    
-                if st.button("Save Run Rate Settings", type="primary"):
-                    st.success("Run Rate alert settings saved successfully for the selected filters!")
-
-        # --- 3. CAPACITY RISK ---
-        with tab3:
-            st.subheader("Capacity Risk Alerts")
-            st.write("Alerts based on lost parts vs optimal or target capacity.")
-            
-            cr_enabled = st.toggle("Enable Capacity Risk Alerts", value=True, key="cr_toggle")
-            
-            if cr_enabled:
-                cr_condition = st.radio("Trigger Condition", ["Lost parts vs Optimal Capacity", "Lost parts vs Target Capacity"], horizontal=True)
+                st.markdown("##### Threshold Boundaries")
+                st.write("Set the upper limit for each level. The system prevents overlapping to avoid errors.")
                 
-                with st.container(border=True):
-                    if cr_condition == "Lost parts vs Target Capacity":
-                        st.markdown("##### Target Definition")
-                        target_cap = st.number_input("Target Capacity Output (%)", value=90, min_value=1, max_value=100, help="Define the percentage to enable calculation of lost parts.")
-                        st.info(f"Calculations will be evaluated against **{target_cap}%** capacity output.")
-                        st.write("---")
+                ct_limits = []
+                prev_val = 0
+                ct_cols = st.columns(ct_num)
+                
+                for i in range(ct_num):
+                    with ct_cols[i]:
+                        val = st.number_input(f"Level {i+1} Upper Limit (%)", 
+                                              min_value=prev_val + 1, 
+                                              max_value=200, 
+                                              value=prev_val + 5, 
+                                              key=f"ct_limit_{i}")
+                        ct_limits.append(val)
+                        prev_val = val
+                
+                st.markdown("##### Alert Conditions Summary")
+                ct_disp_cols = st.columns(ct_num)
+                for i in range(ct_num):
+                    with ct_disp_cols[i]:
+                        lower = 0 if i == 0 else ct_limits[i-1]
+                        upper = ct_limits[i]
+                        op = "≤" if i == 0 else "<"
+                        txt = f"**Level {i+1}**\n\nTriggers when deviation is between **{lower}% and {upper}%**.\n\n`{lower}% {op} deviation ≤ {upper}%`"
+                        display_level_box(i, txt)
+                
+                st.divider()
+                ct_freq = st.selectbox("Alert Frequency", ["Hourly", "Daily", "Weekly", "Monthly"], key="ct_freq")
+                
+            if st.button("Save Cycle Time Settings", type="primary"):
+                st.success("Cycle Time alert settings saved successfully for the selected filters!")
 
-                    st.markdown("##### Configuration: Number of Levels")
-                    cr_num = st.number_input("How many alert levels do you want to configure?", min_value=1, max_value=5, value=2, key="cr_num_levels")
-                    
-                    st.markdown("##### Threshold Boundaries")
-                    st.write("Set the upper limit for capacity loss per level.")
-                    
-                    cr_limits = []
-                    prev_val = 0
-                    cr_cols = st.columns(cr_num)
-                    
-                    for i in range(cr_num):
-                        with cr_cols[i]:
-                            val = st.number_input(f"Level {i+1} Upper Limit (%)", 
-                                                  min_value=prev_val + 1, 
-                                                  max_value=100, 
-                                                  value=min(100, prev_val + 10), 
-                                                  key=f"cr_limit_{i}")
-                            cr_limits.append(val)
-                            prev_val = val
-                    
-                    st.markdown("##### Alert Conditions Summary")
-                    cr_disp_cols = st.columns(cr_num)
-                    for i in range(cr_num):
-                        with cr_disp_cols[i]:
-                            lower = 0 if i == 0 else cr_limits[i-1]
-                            upper = cr_limits[i]
-                            op = "≤" if i == 0 else "<"
-                            txt = f"**Level {i+1}**\n\nTriggers when capacity loss is between **{lower}% and {upper}%**.\n\n`{lower}% {op} loss ≤ {upper}%`"
-                            display_level_box(i, txt)
-
-                    st.divider()
-                    cr_freq = st.selectbox("Alert Frequency", ["Daily", "Weekly", "Monthly"], key="cr_freq")
-                    
-                if st.button("Save Capacity Risk Settings", type="primary"):
-                    st.success("Capacity Risk alert settings saved successfully for the selected filters!")
-
-        # --- 4. TOOLING END OF LIFE ---
-        with tab4:
-            st.subheader("Tooling End of Life Alerts")
-            st.write("Alerts for tools approaching their forecasted maximum shot count.")
+    # --- 2. RUN RATE ---
+    with tab2:
+        st.subheader("Run Rate Alerts")
+        st.write("Alerts based on Run Rate Efficiency and Stability.")
+        
+        rr_enabled = st.toggle("Enable Run Rate Alerts", value=True, key="rr_toggle")
+        
+        if rr_enabled:
+            rr_condition = st.radio("Trigger Condition", ["Low Run Rate Efficiency", "Low Run Rate Stability"], horizontal=True)
             
-            eol_enabled = st.toggle("Enable Tooling End of Life Alerts", value=True, key="eol_toggle")
-            
-            if eol_enabled:
-                with st.container(border=True):
-                    st.markdown("##### Configuration: Number of Levels")
-                    eol_num = st.number_input("How many alert levels do you want to configure?", min_value=1, max_value=5, value=2, key="eol_num_levels")
-                    
-                    st.markdown("##### Threshold Boundaries")
-                    st.write("Set the base starting percentage, followed by the upper limits for each level.")
-                    
-                    base_start = st.number_input("Start Monitoring At (% of max shots)", min_value=0, max_value=99, value=80, key="eol_base")
-                    
-                    eol_limits = []
-                    prev_val = base_start
-                    eol_cols = st.columns(eol_num)
-                    
-                    for i in range(eol_num):
-                        with eol_cols[i]:
-                            val = st.number_input(f"Level {i+1} Upper Limit (%)", 
-                                                  min_value=prev_val + 1, 
-                                                  max_value=200, 
-                                                  value=min(200, prev_val + 10), 
-                                                  key=f"eol_limit_{i}")
-                            eol_limits.append(val)
-                            prev_val = val
-                    
-                    st.markdown("##### Alert Conditions Summary")
-                    eol_disp_cols = st.columns(eol_num)
-                    for i in range(eol_num):
-                        with eol_disp_cols[i]:
-                            lower = base_start if i == 0 else eol_limits[i-1]
-                            upper = eol_limits[i]
-                            op = "≤" if i == 0 else "<"
-                            txt = f"**Level {i+1}**\n\nTriggers when shots are between **{lower}% and {upper}%** of maximum.\n\n`{lower}% {op} shots ≤ {upper}%`"
-                            display_level_box(i, txt)
+            with st.container(border=True):
+                st.markdown("##### Configuration: Number of Levels")
+                rr_num = st.number_input("How many alert levels do you want to configure?", min_value=1, max_value=5, value=2, key="rr_num_levels")
+                
+                st.markdown("##### Threshold Boundaries")
+                st.write("Set the lower limit for each level as performance drops.")
+                
+                rr_limits = []
+                prev_val = 100
+                rr_cols = st.columns(rr_num)
+                
+                for i in range(rr_num):
+                    with rr_cols[i]:
+                        # Ensure the next level is lower than the previous level
+                        val = st.number_input(f"Level {i+1} Lower Limit (%)", 
+                                              min_value=0, 
+                                              max_value=prev_val - 1, 
+                                              value=max(0, prev_val - 15), 
+                                              key=f"rr_limit_{i}")
+                        rr_limits.append(val)
+                        prev_val = val
+                
+                st.markdown("##### Alert Conditions Summary")
+                rr_disp_cols = st.columns(rr_num)
+                for i in range(rr_num):
+                    with rr_disp_cols[i]:
+                        upper = 100 if i == 0 else rr_limits[i-1]
+                        lower = rr_limits[i]
+                        op = "≤" if i == 0 else "<"
+                        txt = f"**Level {i+1}**\n\nTriggers when rate drops between **{lower}% and {upper}%**.\n\n`{lower}% ≤ rate {op} {upper}%`"
+                        display_level_box(i, txt)
 
-                    st.divider()
-                    eol_freq = st.selectbox("Alert Frequency", ["Daily", "Weekly", "Monthly"], key="eol_freq")
-                    
-                if st.button("Save Tooling EOL Settings", type="primary"):
-                    st.success("Tooling End of Life settings saved successfully for the selected filters!")
+                st.divider()
+                rr_freq = st.selectbox("Alert Frequency", ["Daily", "Weekly", "Monthly"], key="rr_freq")
+                
+            if st.button("Save Run Rate Settings", type="primary"):
+                st.success("Run Rate alert settings saved successfully for the selected filters!")
 
-        # --- 5. OPERATION STATUS ---
-        with tab5:
-            st.subheader("Tooling Operation Status Alerts")
-            st.write("Alerts for real-time status changes and offline sensors.")
+    # --- 3. CAPACITY RISK ---
+    with tab3:
+        st.subheader("Capacity Risk Alerts")
+        st.write("Alerts based on lost parts vs optimal or target capacity.")
+        
+        cr_enabled = st.toggle("Enable Capacity Risk Alerts", value=True, key="cr_toggle")
+        
+        if cr_enabled:
+            cr_condition = st.radio("Trigger Condition", ["Lost parts vs Optimal Capacity", "Lost parts vs Target Capacity"], horizontal=True)
             
-            os_enabled = st.toggle("Enable Operation Status Alerts", value=True, key="os_toggle")
-            
-            if os_enabled:
-                with st.container(border=True):
-                    st.markdown("##### Status-Based Alerts")
-                    c1, c2 = st.columns(2)
-                    with c1:
-                        st.multiselect("Trigger when tools remain in:", 
-                                       ["Sensor offline", "Inactive", "Sensor detached"],
-                                       default=["Sensor offline"])
-                    with c2:
-                        st.selectbox("Alert Frequency", ["Daily", "Weekly", "Monthly", "Real time"], index=3, key="os_freq")
-                        
-                    st.divider()
-                    st.markdown("##### Real-Time Event Alerts")
-                    st.checkbox("Tooling starts producing (Tool in press starts producing)", value=True)
-                    st.checkbox("Tooling goes out of the machine (Tool is removed from press)", value=True)
-                    st.caption("*Real-time alerts are triggered immediately upon event detection.*")
+            with st.container(border=True):
+                if cr_condition == "Lost parts vs Target Capacity":
+                    st.markdown("##### Target Definition")
+                    target_cap = st.number_input("Target Capacity Output (%)", value=90, min_value=1, max_value=100, help="Define the percentage to enable calculation of lost parts.")
+                    st.info(f"Calculations will be evaluated against **{target_cap}%** capacity output.")
+                    st.write("---")
+
+                st.markdown("##### Configuration: Number of Levels")
+                cr_num = st.number_input("How many alert levels do you want to configure?", min_value=1, max_value=5, value=2, key="cr_num_levels")
+                
+                st.markdown("##### Threshold Boundaries")
+                st.write("Set the upper limit for capacity loss per level.")
+                
+                cr_limits = []
+                prev_val = 0
+                cr_cols = st.columns(cr_num)
+                
+                for i in range(cr_num):
+                    with cr_cols[i]:
+                        val = st.number_input(f"Level {i+1} Upper Limit (%)", 
+                                              min_value=prev_val + 1, 
+                                              max_value=100, 
+                                              value=min(100, prev_val + 10), 
+                                              key=f"cr_limit_{i}")
+                        cr_limits.append(val)
+                        prev_val = val
+                
+                st.markdown("##### Alert Conditions Summary")
+                cr_disp_cols = st.columns(cr_num)
+                for i in range(cr_num):
+                    with cr_disp_cols[i]:
+                        lower = 0 if i == 0 else cr_limits[i-1]
+                        upper = cr_limits[i]
+                        op = "≤" if i == 0 else "<"
+                        txt = f"**Level {i+1}**\n\nTriggers when capacity loss is between **{lower}% and {upper}%**.\n\n`{lower}% {op} loss ≤ {upper}%`"
+                        display_level_box(i, txt)
+
+                st.divider()
+                cr_freq = st.selectbox("Alert Frequency", ["Daily", "Weekly", "Monthly"], key="cr_freq")
+                
+            if st.button("Save Capacity Risk Settings", type="primary"):
+                st.success("Capacity Risk alert settings saved successfully for the selected filters!")
+
+    # --- 4. TOOLING END OF LIFE ---
+    with tab4:
+        st.subheader("Tooling End of Life Alerts")
+        st.write("Alerts for tools approaching their forecasted maximum shot count.")
+        
+        eol_enabled = st.toggle("Enable Tooling End of Life Alerts", value=True, key="eol_toggle")
+        
+        if eol_enabled:
+            with st.container(border=True):
+                st.markdown("##### Configuration: Number of Levels")
+                eol_num = st.number_input("How many alert levels do you want to configure?", min_value=1, max_value=5, value=2, key="eol_num_levels")
+                
+                st.markdown("##### Threshold Boundaries")
+                st.write("Set the base starting percentage, followed by the upper limits for each level.")
+                
+                base_start = st.number_input("Start Monitoring At (% of max shots)", min_value=0, max_value=99, value=80, key="eol_base")
+                
+                eol_limits = []
+                prev_val = base_start
+                eol_cols = st.columns(eol_num)
+                
+                for i in range(eol_num):
+                    with eol_cols[i]:
+                        val = st.number_input(f"Level {i+1} Upper Limit (%)", 
+                                              min_value=prev_val + 1, 
+                                              max_value=200, 
+                                              value=min(200, prev_val + 10), 
+                                              key=f"eol_limit_{i}")
+                        eol_limits.append(val)
+                        prev_val = val
+                
+                st.markdown("##### Alert Conditions Summary")
+                eol_disp_cols = st.columns(eol_num)
+                for i in range(eol_num):
+                    with eol_disp_cols[i]:
+                        lower = base_start if i == 0 else eol_limits[i-1]
+                        upper = eol_limits[i]
+                        op = "≤" if i == 0 else "<"
+                        txt = f"**Level {i+1}**\n\nTriggers when shots are between **{lower}% and {upper}%** of maximum.\n\n`{lower}% {op} shots ≤ {upper}%`"
+                        display_level_box(i, txt)
+
+                st.divider()
+                eol_freq = st.selectbox("Alert Frequency", ["Daily", "Weekly", "Monthly"], key="eol_freq")
+                
+            if st.button("Save Tooling EOL Settings", type="primary"):
+                st.success("Tooling End of Life settings saved successfully for the selected filters!")
+
+    # --- 5. OPERATION STATUS ---
+    with tab5:
+        st.subheader("Tooling Operation Status Alerts")
+        st.write("Alerts for real-time status changes and offline sensors.")
+        
+        os_enabled = st.toggle("Enable Operation Status Alerts", value=True, key="os_toggle")
+        
+        if os_enabled:
+            with st.container(border=True):
+                st.markdown("##### Status-Based Alerts")
+                c1, c2 = st.columns(2)
+                with c1:
+                    st.multiselect("Trigger when tools remain in:", 
+                                   ["Sensor offline", "Inactive", "Sensor detached"],
+                                   default=["Sensor offline"])
+                with c2:
+                    st.selectbox("Alert Frequency", ["Daily", "Weekly", "Monthly", "Real time"], index=3, key="os_freq")
                     
-                if st.button("Save Operation Status Settings", type="primary"):
-                    st.success("Operation Status alert settings saved successfully for the selected filters!")
+                st.divider()
+                st.markdown("##### Real-Time Event Alerts")
+                st.checkbox("Tooling starts producing (Tool in press starts producing)", value=True)
+                st.checkbox("Tooling goes out of the machine (Tool is removed from press)", value=True)
+                st.caption("*Real-time alerts are triggered immediately upon event detection.*")
+                
+            if st.button("Save Operation Status Settings", type="primary"):
+                st.success("Operation Status alert settings saved successfully for the selected filters!")
 
 # ==========================================
 #          eMOLDINO ADMIN PANEL
