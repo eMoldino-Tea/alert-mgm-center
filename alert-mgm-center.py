@@ -38,6 +38,15 @@ st.markdown("""
     </style>
 """, unsafe_allow_html=True)
 
+# --- HELPER TO DISPLAY COLORED LEVEL BOXES ---
+def display_level_box(level_idx, markdown_text):
+    if level_idx == 0:
+        st.info(markdown_text)
+    elif level_idx == 1:
+        st.warning(markdown_text)
+    else:
+        st.error(markdown_text)
+
 # --- PURE PYTHON PDF GENERATOR (ZERO DEPENDENCIES) ---
 def generate_pure_python_pdf(df):
     """Generates a valid PDF byte string from a DataFrame without external libraries."""
@@ -215,17 +224,35 @@ if app_mode == "User View":
             
             if ct_enabled:
                 with st.container(border=True):
-                    st.markdown("##### Threshold Definition")
-                    st.write("Drag the slider to intuitively define the warning boundaries.")
+                    st.markdown("##### Configuration: Number of Levels")
+                    ct_num = st.number_input("How many alert levels do you want to configure?", min_value=1, max_value=5, value=2, key="ct_num_levels")
                     
-                    # Single slider replaces manual X, Y mathematical logic
-                    ct_range = st.slider("Deviation Thresholds (%)", min_value=0, max_value=100, value=(5, 15), key="ct_slider")
+                    st.markdown("##### Threshold Boundaries")
+                    st.write("Set the upper limit for each level. The system prevents overlapping to avoid errors.")
                     
-                    cl1, cl2 = st.columns(2)
-                    with cl1:
-                        st.info(f"**Level 1 (Warning)**\n\nTriggers when cycle time deviation is between **0% and {ct_range[0]}%**.")
-                    with cl2:
-                        st.warning(f"**Level 2 (Critical)**\n\nTriggers when cycle time deviation is between **{ct_range[0]}% and {ct_range[1]}%**.")
+                    ct_limits = []
+                    prev_val = 0
+                    ct_cols = st.columns(ct_num)
+                    
+                    for i in range(ct_num):
+                        with ct_cols[i]:
+                            val = st.number_input(f"Level {i+1} Upper Limit (%)", 
+                                                  min_value=prev_val + 1, 
+                                                  max_value=200, 
+                                                  value=prev_val + 5, 
+                                                  key=f"ct_limit_{i}")
+                            ct_limits.append(val)
+                            prev_val = val
+                    
+                    st.markdown("##### Alert Conditions Summary")
+                    ct_disp_cols = st.columns(ct_num)
+                    for i in range(ct_num):
+                        with ct_disp_cols[i]:
+                            lower = 0 if i == 0 else ct_limits[i-1]
+                            upper = ct_limits[i]
+                            op = "≤" if i == 0 else "<"
+                            txt = f"**Level {i+1}**\n\nTriggers when deviation is between **{lower}% and {upper}%**.\n\n`{lower}% {op} deviation ≤ {upper}%`"
+                            display_level_box(i, txt)
                     
                     st.divider()
                     ct_freq = st.selectbox("Alert Frequency", ["Hourly", "Daily", "Weekly", "Monthly"], key="ct_freq")
@@ -244,17 +271,36 @@ if app_mode == "User View":
                 rr_condition = st.radio("Trigger Condition", ["Low Run Rate Efficiency", "Low Run Rate Stability"], horizontal=True)
                 
                 with st.container(border=True):
-                    st.markdown("##### Threshold Definition")
-                    st.write("Drag the slider to define the efficiency/stability boundaries.")
+                    st.markdown("##### Configuration: Number of Levels")
+                    rr_num = st.number_input("How many alert levels do you want to configure?", min_value=1, max_value=5, value=2, key="rr_num_levels")
                     
-                    # Slider captures the Z (lower bound) and X (mid bound). Y is assumed 100%.
-                    rr_range = st.slider(f"{rr_condition} Thresholds (%)", min_value=0, max_value=100, value=(50, 80), key="rr_slider")
+                    st.markdown("##### Threshold Boundaries")
+                    st.write("Set the lower limit for each level as performance drops.")
                     
-                    rl1, rl2 = st.columns(2)
-                    with rl1:
-                        st.info(f"**Level 1 (Warning)**\n\nTriggers when rate drops between **{rr_range[1]}% and 100%**.")
-                    with rl2:
-                        st.warning(f"**Level 2 (Critical)**\n\nTriggers when rate drops critically between **{rr_range[0]}% and {rr_range[1]}%**.")
+                    rr_limits = []
+                    prev_val = 100
+                    rr_cols = st.columns(rr_num)
+                    
+                    for i in range(rr_num):
+                        with rr_cols[i]:
+                            # Ensure the next level is lower than the previous level
+                            val = st.number_input(f"Level {i+1} Lower Limit (%)", 
+                                                  min_value=0, 
+                                                  max_value=prev_val - 1, 
+                                                  value=max(0, prev_val - 15), 
+                                                  key=f"rr_limit_{i}")
+                            rr_limits.append(val)
+                            prev_val = val
+                    
+                    st.markdown("##### Alert Conditions Summary")
+                    rr_disp_cols = st.columns(rr_num)
+                    for i in range(rr_num):
+                        with rr_disp_cols[i]:
+                            upper = 100 if i == 0 else rr_limits[i-1]
+                            lower = rr_limits[i]
+                            op = "≤" if i == 0 else "<"
+                            txt = f"**Level {i+1}**\n\nTriggers when rate drops between **{lower}% and {upper}%**.\n\n`{lower}% ≤ rate {op} {upper}%`"
+                            display_level_box(i, txt)
 
                     st.divider()
                     rr_freq = st.selectbox("Alert Frequency", ["Daily", "Weekly", "Monthly"], key="rr_freq")
@@ -273,21 +319,41 @@ if app_mode == "User View":
                 cr_condition = st.radio("Trigger Condition", ["Lost parts vs Optimal Capacity", "Lost parts vs Target Capacity"], horizontal=True)
                 
                 with st.container(border=True):
-                    st.markdown("##### Target & Threshold Definition")
-                    
                     if cr_condition == "Lost parts vs Target Capacity":
+                        st.markdown("##### Target Definition")
                         target_cap = st.number_input("Target Capacity Output (%)", value=90, min_value=1, max_value=100, help="Define the percentage to enable calculation of lost parts.")
                         st.info(f"Calculations will be evaluated against **{target_cap}%** capacity output.")
                         st.write("---")
 
-                    st.write("Drag the slider to define the capacity loss boundaries.")
-                    cr_range = st.slider("Capacity Loss Thresholds (%)", min_value=0, max_value=100, value=(5, 15), key="cr_slider")
+                    st.markdown("##### Configuration: Number of Levels")
+                    cr_num = st.number_input("How many alert levels do you want to configure?", min_value=1, max_value=5, value=2, key="cr_num_levels")
                     
-                    cl1, cl2 = st.columns(2)
-                    with cl1:
-                        st.info(f"**Level 1 (Warning)**\n\nTriggers when capacity loss is between **0% and {cr_range[0]}%**.")
-                    with cl2:
-                        st.warning(f"**Level 2 (Critical)**\n\nTriggers when capacity loss is between **{cr_range[0]}% and {cr_range[1]}%**.")
+                    st.markdown("##### Threshold Boundaries")
+                    st.write("Set the upper limit for capacity loss per level.")
+                    
+                    cr_limits = []
+                    prev_val = 0
+                    cr_cols = st.columns(cr_num)
+                    
+                    for i in range(cr_num):
+                        with cr_cols[i]:
+                            val = st.number_input(f"Level {i+1} Upper Limit (%)", 
+                                                  min_value=prev_val + 1, 
+                                                  max_value=100, 
+                                                  value=min(100, prev_val + 10), 
+                                                  key=f"cr_limit_{i}")
+                            cr_limits.append(val)
+                            prev_val = val
+                    
+                    st.markdown("##### Alert Conditions Summary")
+                    cr_disp_cols = st.columns(cr_num)
+                    for i in range(cr_num):
+                        with cr_disp_cols[i]:
+                            lower = 0 if i == 0 else cr_limits[i-1]
+                            upper = cr_limits[i]
+                            op = "≤" if i == 0 else "<"
+                            txt = f"**Level {i+1}**\n\nTriggers when capacity loss is between **{lower}% and {upper}%**.\n\n`{lower}% {op} loss ≤ {upper}%`"
+                            display_level_box(i, txt)
 
                     st.divider()
                     cr_freq = st.selectbox("Alert Frequency", ["Daily", "Weekly", "Monthly"], key="cr_freq")
@@ -304,16 +370,37 @@ if app_mode == "User View":
             
             if eol_enabled:
                 with st.container(border=True):
-                    st.markdown("##### Threshold Definition")
-                    st.write("Drag the slider to define when approaching end-of-life alerts should trigger.")
+                    st.markdown("##### Configuration: Number of Levels")
+                    eol_num = st.number_input("How many alert levels do you want to configure?", min_value=1, max_value=5, value=2, key="eol_num_levels")
                     
-                    eol_range = st.slider("Accumulated Shots Thresholds (% of max)", min_value=0, max_value=100, value=(80, 90), key="eol_slider")
+                    st.markdown("##### Threshold Boundaries")
+                    st.write("Set the base starting percentage, followed by the upper limits for each level.")
                     
-                    el1, el2 = st.columns(2)
-                    with el1:
-                        st.info(f"**Level 1 (Warning)**\n\nTriggers when accumulated shots are between **{eol_range[0]}% and {eol_range[1]}%** of maximum.")
-                    with el2:
-                        st.warning(f"**Level 2 (Critical)**\n\nTriggers when accumulated shots exceed **{eol_range[1]}%** of maximum.")
+                    base_start = st.number_input("Start Monitoring At (% of max shots)", min_value=0, max_value=99, value=80, key="eol_base")
+                    
+                    eol_limits = []
+                    prev_val = base_start
+                    eol_cols = st.columns(eol_num)
+                    
+                    for i in range(eol_num):
+                        with eol_cols[i]:
+                            val = st.number_input(f"Level {i+1} Upper Limit (%)", 
+                                                  min_value=prev_val + 1, 
+                                                  max_value=200, 
+                                                  value=min(200, prev_val + 10), 
+                                                  key=f"eol_limit_{i}")
+                            eol_limits.append(val)
+                            prev_val = val
+                    
+                    st.markdown("##### Alert Conditions Summary")
+                    eol_disp_cols = st.columns(eol_num)
+                    for i in range(eol_num):
+                        with eol_disp_cols[i]:
+                            lower = base_start if i == 0 else eol_limits[i-1]
+                            upper = eol_limits[i]
+                            op = "≤" if i == 0 else "<"
+                            txt = f"**Level {i+1}**\n\nTriggers when shots are between **{lower}% and {upper}%** of maximum.\n\n`{lower}% {op} shots ≤ {upper}%`"
+                            display_level_box(i, txt)
 
                     st.divider()
                     eol_freq = st.selectbox("Alert Frequency", ["Daily", "Weekly", "Monthly"], key="eol_freq")
