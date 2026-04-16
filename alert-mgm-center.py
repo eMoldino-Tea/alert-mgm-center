@@ -43,28 +43,6 @@ st.markdown("""
     </style>
 """, unsafe_allow_html=True)
 
-# --- SIDEBAR: NAVIGATION & GLOBAL SETTINGS ---
-with st.sidebar:
-    st.image("https://via.placeholder.com/200x60?text=EMOLDINO", use_container_width=True)
-    
-    st.markdown("### Application Mode")
-    app_mode = st.radio("Select View:", ["User View", "eMoldino Admin Panel"])
-    
-    st.divider()
-    
-    if app_mode == "User View":
-        st.markdown("### Global Notification Settings")
-        st.write("Select how you want to receive alerts globally:")
-        
-        in_system = st.checkbox("🔔 In-System Notifications", value=True)
-        mobile_push = st.checkbox("📱 Mobile Push", value=True)
-        email_notif = st.checkbox("✉️ Email", value=True)
-        
-        st.divider()
-        st.markdown("### Account")
-        st.write("👤 **User:** Admin")
-        st.write("🏢 **Role:** Plant Manager")
-
 # --- REUSABLE FILTER FUNCTION ---
 def render_filters(key_prefix, layout="vertical"):
     if layout == "vertical":
@@ -90,6 +68,20 @@ def render_filters(key_prefix, layout="vertical"):
             
     return {"OEM": oem, "Supplier": sup, "Plant": plt, "Product": prod, "Tooling Type": ttype, "Part": part, "Tooling": tool}
 
+# --- SIDEBAR: NAVIGATION & GLOBAL SETTINGS ---
+with st.sidebar:
+    st.image("https://via.placeholder.com/200x60?text=EMOLDINO", use_container_width=True)
+    
+    st.markdown("### Application Mode")
+    app_mode = st.radio("Select View:", ["User View", "eMoldino Admin Panel"])
+    
+    st.divider()
+    
+    if app_mode == "User View":
+        st.markdown("### 🎯 Data Filters")
+        st.caption("Select desired filters first to define the target scope of your alerts. Leave empty to apply globally.")
+        user_filters = render_filters("user", layout="vertical")
+
 # ==========================================
 #              USER VIEW
 # ==========================================
@@ -100,11 +92,6 @@ if app_mode == "User View":
     left_panel, right_panel = st.columns([1, 3], gap="large")
     
     with left_panel:
-        st.markdown("### 🎯 Data Filters")
-        st.caption("Select desired filters first to define the target scope of your alerts. Leave empty to apply globally.")
-        user_filters = render_filters("user", layout="vertical")
-        
-        st.divider()
         st.markdown("### 📥 Export Assigned Alerts")
         st.caption("Export your configured alerts summary or send it directly via email.")
         
