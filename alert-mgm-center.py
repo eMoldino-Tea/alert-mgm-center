@@ -95,43 +95,118 @@ if app_mode == "User View":
         st.markdown("### 📥 Export Assigned Alerts")
         st.caption("Export your configured alerts summary or send it directly via email.")
         
-        # Dummy data simulating the user's currently assigned alerts
+        # Comprehensive Data Design simulating the user's currently assigned alerts
         dummy_alerts_df = pd.DataFrame({
-            "Alert ID": ["ALT-1024", "ALT-1025", "ALT-1026", "ALT-1027"],
-            "Alert Type": ["Cycle Time", "Run Rate", "Capacity Risk", "Operation Status"],
-            "Target Scope": ["Plant 1 | Tool_A", "Global (All)", "Supplier X | Product Alpha", "Div A | Plant 2"],
-            "Condition": ["0% ≤ dev ≤ 5%", "80% ≤ RR ≤ 100%", "0% ≤ loss ≤ 5%", "Sensor Offline"],
-            "Frequency": ["Daily", "Weekly", "Monthly", "Real time"],
-            "Status": ["Active", "Active", "Inactive", "Active"]
+            "Alert ID": ["ALT-1024", "ALT-1025", "ALT-1026", "ALT-1027", "ALT-1028"],
+            "Alert Type": ["Cycle Time", "Run Rate", "Capacity Risk", "Tooling EOL", "Operation Status"],
+            "OEM Division": ["Div A", "All", "Div B", "All", "Div C"],
+            "Supplier": ["Supplier X", "All", "Supplier Y", "Supplier Z", "All"],
+            "Plant": ["Plant 1", "All", "Plant 2", "All", "Plant 3"],
+            "Tooling / Part": ["Tool_A", "All", "Product Alpha", "Part 101", "Tool_C"],
+            "Level 1 Condition": ["0% ≤ dev ≤ 5%", "80% ≤ RR ≤ 100%", "0% ≤ loss ≤ 5%", "80% ≤ shots ≤ 90%", "Sensor Offline"],
+            "Level 2 Condition": ["5% < dev ≤ 15%", "50% ≤ RR < 80%", "5% < loss ≤ 15%", "90% < shots ≤ 100%", "Inactive/Detached"],
+            "Frequency": ["Daily", "Weekly", "Monthly", "Weekly", "Real time"],
+            "Status": ["Active", "Active", "Inactive", "Active", "Active"],
+            "Last Modified": ["2026-04-10", "2026-04-12", "2026-04-14", "2026-04-15", "2026-04-16"]
         })
         
+        with st.expander("👁️ Preview Export Data"):
+            st.dataframe(dummy_alerts_df, use_container_width=True)
+
         export_format = st.radio("Select Export Format", ["CSV", "PDF"], horizontal=True)
         
         if export_format == "CSV":
             export_data = dummy_alerts_df.to_csv(index=False).encode('utf-8')
             file_extension = "csv"
             mime_type = "text/csv"
+            
+            st.download_button(
+                label=f"⬇️ Download {export_format} Report",
+                data=export_data,
+                file_name=f"assigned_alerts_{datetime.datetime.now().strftime('%Y%m%d')}.{file_extension}",
+                mime=mime_type,
+                use_container_width=True
+            )
         else:
-            # A minimal valid dummy PDF byte string for sample purposes
-            # In a production environment, you would use a library like `fpdf` or `reportlab` to generate this.
-            export_data = b"%PDF-1.4\n1 0 obj\n<< /Type /Catalog /Pages 2 0 R >>\nendobj\n2 0 obj\n<< /Type /Pages /Kids [3 0 R] /Count 1 >>\nendobj\n3 0 obj\n<< /Type /Page /Parent 2 0 R /MediaBox [0 0 612 792] /Contents 4 0 R >>\nendobj\n4 0 obj\n<< /Length 57 >>\nstream\nBT /F1 24 Tf 100 700 Td (Alerts Summary Report) Tj ET\nendstream\nendobj\nxref\n0 5\n0000000000 65535 f \n0000000009 00000 n \n0000000058 00000 n \n0000000115 00000 n \n0000000213 00000 n \ntrailer\n<< /Size 5 /Root 1 0 R >>\nstartxref\n321\n%%EOF"
-            file_extension = "pdf"
-            mime_type = "application/pdf"
-        
-        st.download_button(
-            label=f"⬇️ Download {export_format} Report",
-            data=export_data,
-            file_name=f"assigned_alerts_{datetime.datetime.now().strftime('%Y%m%d')}.{file_extension}",
-            mime=mime_type,
-            use_container_width=True
-        )
+            try:
+                from fpdf import FPDF
+                
+                # Custom PDF Class Design
+                class PDF(FPDF):
+                    def header(self):
+                        self.set_font('Arial', 'B', 15)
+                        self.set_text_color(30, 58, 138) # eMoldino Blue
+                        self.cell(0, 10, 'eMoldino - Alert Management Center', 0, 1, 'C')
+                        self.set_font('Arial', 'I', 11)
+                        self.set_text_color(100, 100, 100)
+                        self.cell(0, 10, 'Assigned Alerts Configuration Summary', 0, 1, 'C')
+                        self.set_font('Arial', '', 9)
+                        self.cell(0, 8, f'Generated on: {datetime.datetime.now().strftime("%Y-%m-%d %H:%M:%S")}', 0, 1, 'C')
+                        self.ln(5)
+
+                    def footer(self):
+                        self.set_y(-15)
+                        self.set_font('Arial', 'I', 8)
+                        self.set_text_color(128, 128, 128)
+                        self.cell(0, 10, f'Page {self.page_no()}', 0, 0, 'C')
+
+                # Generate PDF Document in Landscape
+                pdf = PDF(orientation='L')
+                pdf.add_page()
+                
+                # Table Header Styling
+                pdf.set_font('Arial', 'B', 9)
+                pdf.set_fill_color(240, 240, 240)
+                
+                cols = ["ID", "Alert Type", "Plant Scope", "Tooling/Part Scope", "Lvl 1 Condition", "Frequency", "Status"]
+                widths = [20, 35, 40, 45, 55, 25, 25]
+                
+                for i, col in enumerate(cols):
+                    pdf.cell(widths[i], 10, col, 1, 0, 'C', fill=True)
+                pdf.ln()
+
+                # Table Data Injection
+                pdf.set_font('Arial', '', 8)
+                for i, row in dummy_alerts_df.iterrows():
+                    pdf.cell(widths[0], 10, str(row['Alert ID']), 1, 0, 'C')
+                    pdf.cell(widths[1], 10, str(row['Alert Type']), 1, 0, 'C')
+                    pdf.cell(widths[2], 10, str(row['Plant'])[:20], 1, 0, 'C')
+                    pdf.cell(widths[3], 10, str(row['Tooling / Part'])[:22], 1, 0, 'C')
+                    pdf.cell(widths[4], 10, str(row['Level 1 Condition']), 1, 0, 'C')
+                    pdf.cell(widths[5], 10, str(row['Frequency']), 1, 0, 'C')
+                    
+                    # Color code status
+                    if row['Status'] == "Active":
+                        pdf.set_text_color(0, 128, 0)
+                    else:
+                        pdf.set_text_color(200, 0, 0)
+                        
+                    pdf.cell(widths[6], 10, str(row['Status']), 1, 0, 'C')
+                    pdf.set_text_color(0, 0, 0) # Reset color
+                    pdf.ln()
+
+                export_data = bytes(pdf.output(dest='S').encode('latin1'))
+                file_extension = "pdf"
+                mime_type = "application/pdf"
+                
+                st.download_button(
+                    label=f"⬇️ Download {export_format} Report",
+                    data=export_data,
+                    file_name=f"assigned_alerts_{datetime.datetime.now().strftime('%Y%m%d')}.{file_extension}",
+                    mime=mime_type,
+                    use_container_width=True
+                )
+                
+            except ImportError:
+                st.error("⚠️ Library 'fpdf' is missing. Please run `pip install fpdf` to enable designed PDF exports.")
         
         with st.popover("✉️ Send to Email", use_container_width=True):
             st.write("Send report to email")
             email_input = st.text_input("Email Address", value="admin.plant@emoldino.com")
             
             # Format selection also applies to the email attachment idea
-            st.caption(f"Attachment: assigned_alerts.{file_extension}")
+            if 'file_extension' in locals():
+                st.caption(f"Attachment: assigned_alerts.{file_extension}")
             
             if st.button("Send Now", type="primary", use_container_width=True):
                 st.success(f"Report successfully sent to {email_input}!")
