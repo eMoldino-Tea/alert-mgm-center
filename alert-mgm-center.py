@@ -70,7 +70,6 @@ def render_filters(key_prefix, layout="vertical"):
 
 # --- SIDEBAR: NAVIGATION & GLOBAL SETTINGS ---
 with st.sidebar:
-    st.image("https://via.placeholder.com/200x60?text=EMOLDINO", use_container_width=True)
     
     st.markdown("### Application Mode")
     app_mode = st.radio("Select View:", ["User View", "eMoldino Admin Panel"])
