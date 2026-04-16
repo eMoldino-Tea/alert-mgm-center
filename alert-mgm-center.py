@@ -30,15 +30,10 @@ st.markdown("""
         color: #6B7280;
         margin-bottom: 2rem;
     }
-    .formula-box {
-        background-color: #f3f4f6;
-        padding: 10px;
-        border-radius: 5px;
-        font-family: monospace;
-        font-size: 1.1rem;
-        color: #111827;
+    .level-box {
+        padding: 15px;
+        border-radius: 8px;
         margin-top: 10px;
-        border-left: 4px solid #3b82f6;
     }
     </style>
 """, unsafe_allow_html=True)
@@ -137,7 +132,7 @@ with st.sidebar:
     st.divider()
     
     if app_mode == "User View":
-        st.markdown("### 🎯 Data Filters")
+        st.markdown("### Data Filters")
         st.caption("Select desired filters first to define the target scope of your alerts. Leave empty to apply globally.")
         user_filters = render_filters("user", layout="vertical")
 
@@ -151,7 +146,7 @@ if app_mode == "User View":
     left_panel, right_panel = st.columns([1, 3], gap="large")
     
     with left_panel:
-        st.markdown("### 📥 Export Assigned Alerts")
+        st.markdown("### Export Assigned Alerts")
         st.caption("Export your configured alerts summary or send it directly via email.")
         
         # Comprehensive Data Design simulating the user's currently assigned alerts
@@ -169,7 +164,7 @@ if app_mode == "User View":
             "Last Modified": ["2026-04-10", "2026-04-12", "2026-04-14", "2026-04-15", "2026-04-16"]
         })
         
-        with st.expander("👁️ Preview Export Data"):
+        with st.expander("Preview Export Data"):
             st.dataframe(dummy_alerts_df, use_container_width=True)
 
         export_format = st.radio("Select Export Format", ["CSV", "PDF"], horizontal=True)
@@ -185,14 +180,14 @@ if app_mode == "User View":
             mime_type = "application/pdf"
             
         st.download_button(
-            label=f"⬇️ Download {export_format} Report",
+            label=f"Download {export_format} Report",
             data=export_data,
             file_name=f"assigned_alerts_{datetime.datetime.now().strftime('%Y%m%d')}.{file_extension}",
             mime=mime_type,
             use_container_width=True
         )
         
-        with st.popover("✉️ Send to Email", use_container_width=True):
+        with st.popover("Send to Email", use_container_width=True):
             st.write("Send report to email")
             email_input = st.text_input("Email Address", value="admin.plant@emoldino.com")
             
@@ -204,11 +199,11 @@ if app_mode == "User View":
 
     with right_panel:
         tab1, tab2, tab3, tab4, tab5 = st.tabs([
-            "⏱️ Cycle Time", 
-            "📈 Run Rate", 
-            "⚠️ Capacity Risk", 
-            "⚙️ Tooling End of Life", 
-            "📡 Operation Status"
+            "Cycle Time", 
+            "Run Rate", 
+            "Capacity Risk", 
+            "Tooling End of Life", 
+            "Operation Status"
         ])
 
         # --- 1. CYCLE TIME ---
@@ -220,22 +215,17 @@ if app_mode == "User View":
             
             if ct_enabled:
                 with st.container(border=True):
-                    st.markdown("##### 🎚️ Level & Threshold Definition")
-                    st.write("Define variables X and Y to set the continuous ranges:")
+                    st.markdown("##### Threshold Definition")
+                    st.write("Drag the slider to intuitively define the warning boundaries.")
                     
-                    cx1, cx2 = st.columns(2)
-                    with cx1:
-                        x_ct = st.number_input("Value X (%)", value=5, min_value=0, key="ct_x")
-                    with cx2:
-                        y_ct = st.number_input("Value Y (%)", value=15, min_value=x_ct+1, key="ct_y")
+                    # Single slider replaces manual X, Y mathematical logic
+                    ct_range = st.slider("Deviation Thresholds (%)", min_value=0, max_value=100, value=(5, 15), key="ct_slider")
                     
                     cl1, cl2 = st.columns(2)
                     with cl1:
-                        st.markdown("**Level 1 Condition**")
-                        st.markdown(f'<div class="formula-box">0% ≤ deviation ≤ {x_ct}%</div>', unsafe_allow_html=True)
+                        st.info(f"**Level 1 (Warning)**\n\nTriggers when cycle time deviation is between **0% and {ct_range[0]}%**.")
                     with cl2:
-                        st.markdown("**Level 2 Condition**")
-                        st.markdown(f'<div class="formula-box">{x_ct}% &lt; deviation ≤ {y_ct}%</div>', unsafe_allow_html=True)
+                        st.warning(f"**Level 2 (Critical)**\n\nTriggers when cycle time deviation is between **{ct_range[0]}% and {ct_range[1]}%**.")
                     
                     st.divider()
                     ct_freq = st.selectbox("Alert Frequency", ["Hourly", "Daily", "Weekly", "Monthly"], key="ct_freq")
@@ -254,22 +244,17 @@ if app_mode == "User View":
                 rr_condition = st.radio("Trigger Condition", ["Low Run Rate Efficiency", "Low Run Rate Stability"], horizontal=True)
                 
                 with st.container(border=True):
-                    st.markdown("##### 🎚️ Level & Threshold Definition")
-                    rx1, rx2, rx3 = st.columns(3)
-                    with rx1:
-                        x_rr = st.number_input("Value X (%)", value=80, key="rr_x")
-                    with rx2:
-                        y_rr = st.number_input("Value Y (%)", value=100, key="rr_y")
-                    with rx3:
-                        z_rr = st.number_input("Value Z (%)", value=50, key="rr_z")
+                    st.markdown("##### Threshold Definition")
+                    st.write("Drag the slider to define the efficiency/stability boundaries.")
+                    
+                    # Slider captures the Z (lower bound) and X (mid bound). Y is assumed 100%.
+                    rr_range = st.slider(f"{rr_condition} Thresholds (%)", min_value=0, max_value=100, value=(50, 80), key="rr_slider")
                     
                     rl1, rl2 = st.columns(2)
                     with rl1:
-                        st.markdown("**Level 1 Condition**")
-                        st.markdown(f'<div class="formula-box">{x_rr}% ≤ RR ≤ {y_rr}%</div>', unsafe_allow_html=True)
+                        st.info(f"**Level 1 (Warning)**\n\nTriggers when rate drops between **{rr_range[1]}% and 100%**.")
                     with rl2:
-                        st.markdown("**Level 2 Condition**")
-                        st.markdown(f'<div class="formula-box">{z_rr}% ≤ RR &lt; {x_rr}%</div>', unsafe_allow_html=True)
+                        st.warning(f"**Level 2 (Critical)**\n\nTriggers when rate drops critically between **{rr_range[0]}% and {rr_range[1]}%**.")
 
                     st.divider()
                     rr_freq = st.selectbox("Alert Frequency", ["Daily", "Weekly", "Monthly"], key="rr_freq")
@@ -288,28 +273,21 @@ if app_mode == "User View":
                 cr_condition = st.radio("Trigger Condition", ["Lost parts vs Optimal Capacity", "Lost parts vs Target Capacity"], horizontal=True)
                 
                 with st.container(border=True):
-                    st.markdown("##### 🎚️ Target & Threshold Definition")
+                    st.markdown("##### Target & Threshold Definition")
                     
-                    # Dynamic input based on feedback constraint
                     if cr_condition == "Lost parts vs Target Capacity":
-                        st.markdown("**Target Configuration**")
                         target_cap = st.number_input("Target Capacity Output (%)", value=90, min_value=1, max_value=100, help="Define the percentage to enable calculation of lost parts.")
                         st.info(f"Calculations will be evaluated against **{target_cap}%** capacity output.")
                         st.write("---")
 
-                    cx1, cx2 = st.columns(2)
-                    with cx1:
-                        x_cr = st.number_input("Value X (%)", value=5, min_value=0, key="cr_x")
-                    with cx2:
-                        y_cr = st.number_input("Value Y (%)", value=15, min_value=x_cr+1, key="cr_y")
+                    st.write("Drag the slider to define the capacity loss boundaries.")
+                    cr_range = st.slider("Capacity Loss Thresholds (%)", min_value=0, max_value=100, value=(5, 15), key="cr_slider")
                     
                     cl1, cl2 = st.columns(2)
                     with cl1:
-                        st.markdown("**Level 1 Condition**")
-                        st.markdown(f'<div class="formula-box">0% ≤ loss ≤ {x_cr}%</div>', unsafe_allow_html=True)
+                        st.info(f"**Level 1 (Warning)**\n\nTriggers when capacity loss is between **0% and {cr_range[0]}%**.")
                     with cl2:
-                        st.markdown("**Level 2 Condition**")
-                        st.markdown(f'<div class="formula-box">{x_cr}% &lt; loss ≤ {y_cr}%</div>', unsafe_allow_html=True)
+                        st.warning(f"**Level 2 (Critical)**\n\nTriggers when capacity loss is between **{cr_range[0]}% and {cr_range[1]}%**.")
 
                     st.divider()
                     cr_freq = st.selectbox("Alert Frequency", ["Daily", "Weekly", "Monthly"], key="cr_freq")
@@ -326,22 +304,16 @@ if app_mode == "User View":
             
             if eol_enabled:
                 with st.container(border=True):
-                    st.markdown("##### 🎚️ Level & Threshold Definition")
-                    ex1, ex2, ex3 = st.columns(3)
-                    with ex1:
-                        x_eol = st.number_input("Value X (%)", value=80, key="eol_x")
-                    with ex2:
-                        y_eol = st.number_input("Value Y (%)", value=90, key="eol_y")
-                    with ex3:
-                        z_eol = st.number_input("Value Z (%)", value=100, key="eol_z")
+                    st.markdown("##### Threshold Definition")
+                    st.write("Drag the slider to define when approaching end-of-life alerts should trigger.")
+                    
+                    eol_range = st.slider("Accumulated Shots Thresholds (% of max)", min_value=0, max_value=100, value=(80, 90), key="eol_slider")
                     
                     el1, el2 = st.columns(2)
                     with el1:
-                        st.markdown("**Level 1 Condition**")
-                        st.markdown(f'<div class="formula-box">{x_eol}% ≤ accumulated shots ≤ {y_eol}% of max</div>', unsafe_allow_html=True)
+                        st.info(f"**Level 1 (Warning)**\n\nTriggers when accumulated shots are between **{eol_range[0]}% and {eol_range[1]}%** of maximum.")
                     with el2:
-                        st.markdown("**Level 2 Condition**")
-                        st.markdown(f'<div class="formula-box">{y_eol}% &lt; accumulated shots ≤ {z_eol}% of max</div>', unsafe_allow_html=True)
+                        st.warning(f"**Level 2 (Critical)**\n\nTriggers when accumulated shots exceed **{eol_range[1]}%** of maximum.")
 
                     st.divider()
                     eol_freq = st.selectbox("Alert Frequency", ["Daily", "Weekly", "Monthly"], key="eol_freq")
@@ -358,7 +330,7 @@ if app_mode == "User View":
             
             if os_enabled:
                 with st.container(border=True):
-                    st.markdown("##### 🎚️ Status-Based Alerts")
+                    st.markdown("##### Status-Based Alerts")
                     c1, c2 = st.columns(2)
                     with c1:
                         st.multiselect("Trigger when tools remain in:", 
@@ -367,9 +339,10 @@ if app_mode == "User View":
                     with c2:
                         st.selectbox("Alert Frequency", ["Daily", "Weekly", "Monthly", "Real time"], index=3, key="os_freq")
                         
-                    st.markdown("##### ⚡ Real-Time Event Alerts")
-                    st.checkbox("🚨 Tooling starts producing (Tool in press starts producing)", value=True)
-                    st.checkbox("🚨 Tooling goes out of the machine (Tool is removed from press)", value=True)
+                    st.divider()
+                    st.markdown("##### Real-Time Event Alerts")
+                    st.checkbox("Tooling starts producing (Tool in press starts producing)", value=True)
+                    st.checkbox("Tooling goes out of the machine (Tool is removed from press)", value=True)
                     st.caption("*Real-time alerts are triggered immediately upon event detection.*")
                     
                 if st.button("Save Operation Status Settings", type="primary"):
@@ -401,13 +374,13 @@ elif app_mode == "eMoldino Admin Panel":
     with st.container(border=True):
         st.subheader("2. Alert Definition Flow")
         
-        st.markdown("##### 🎯 Step 1: Configure Target Scope (Filters)")
+        st.markdown("##### Step 1: Configure Target Scope (Filters)")
         st.caption("Select all filters or a subset for this alert.")
         admin_filters = render_filters("admin", layout="horizontal")
             
         st.divider()
         
-        st.markdown("##### 🎚️ Step 2: Select Alert Type")
+        st.markdown("##### Step 2: Select Alert Type")
         selected_alert = st.selectbox("Select Alert Type to Program", 
                                       ["Cycle Time", "Run Rate", "Capacity Risk", "Tooling End of Life", "Operation Status"])
             
@@ -430,7 +403,7 @@ elif app_mode == "eMoldino Admin Panel":
             st.session_state.admin_log = pd.concat([new_log, st.session_state.admin_log], ignore_index=True)
             st.success(f"Successfully programmed '{selected_alert}' alert for {selected_user}!")
 
-    st.markdown("### 📋 Programmed Alerts Log")
+    st.markdown("### Programmed Alerts Log")
     st.caption("A track record of all alerts set up by eMoldino administrators.")
     
     if st.session_state.admin_log.empty:
