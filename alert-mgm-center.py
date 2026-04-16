@@ -43,6 +43,66 @@ st.markdown("""
     </style>
 """, unsafe_allow_html=True)
 
+# --- PURE PYTHON PDF GENERATOR (ZERO DEPENDENCIES) ---
+def generate_pure_python_pdf(df):
+    """Generates a valid PDF byte string from a DataFrame without external libraries."""
+    cols_to_print = ["Alert ID", "Alert Type", "Plant", "Tooling / Part", "Level 1 Condition", "Status"]
+    widths = [12, 18, 12, 20, 22, 10]
+    
+    lines = []
+    lines.append("eMoldino - Alert Management Center")
+    lines.append("Assigned Alerts Configuration Summary")
+    lines.append(f"Generated on: {datetime.datetime.now().strftime('%Y-%m-%d %H:%M:%S')}")
+    lines.append("")
+    
+    # Format header
+    header = "".join([cols_to_print[i].ljust(widths[i]) for i in range(len(cols_to_print))])
+    lines.append(header)
+    lines.append("-" * sum(widths))
+    
+    # Format rows
+    for _, row in df.iterrows():
+        row_str = "".join([str(row[cols_to_print[i]])[:widths[i]-1].ljust(widths[i]) for i in range(len(cols_to_print))])
+        lines.append(row_str)
+        
+    # Build raw PDF stream
+    stream_data = "BT\n/F1 11 Tf\n30 540 Td\n15 TL\n"
+    for line in lines:
+        clean_line = line.replace('\\', '\\\\').replace('(', '\\(').replace(')', '\\)')
+        stream_data += f"({clean_line}) Tj\nT*\n"
+    stream_data += "ET"
+    
+    stream_bytes = stream_data.encode('latin-1', 'replace')
+    
+    # Build PDF Objects
+    objects = [
+        b"%PDF-1.4\n",
+        b"1 0 obj\n<< /Type /Catalog /Pages 2 0 R >>\nendobj\n",
+        b"2 0 obj\n<< /Type /Pages /Kids [3 0 R] /Count 1 >>\nendobj\n",
+        b"3 0 obj\n<< /Type /Page /Parent 2 0 R /MediaBox [0 0 842 595] /Contents 4 0 R /Resources << /Font << /F1 5 0 R >> >> >>\nendobj\n",
+        f"4 0 obj\n<< /Length {len(stream_bytes)} >>\nstream\n".encode('ascii') + stream_bytes + b"\nendstream\nendobj\n",
+        b"5 0 obj\n<< /Type /Font /Subtype /Type1 /BaseFont /Courier >>\nendobj\n"
+    ]
+    
+    # Compile file structure & XREF table
+    pdf_content = bytearray()
+    xref_offsets = []
+    
+    for obj in objects:
+        if obj.startswith(b"%PDF"):
+            pdf_content.extend(obj)
+        else:
+            xref_offsets.append(len(pdf_content))
+            pdf_content.extend(obj)
+            
+    xref_start = len(pdf_content)
+    pdf_content.extend(b"xref\n0 6\n0000000000 65535 f \n")
+    for offset in xref_offsets:
+        pdf_content.extend(f"{offset:010d} 00000 n \n".encode('ascii'))
+        
+    pdf_content.extend(f"trailer\n<< /Size 6 /Root 1 0 R >>\nstartxref\n{xref_start}\n%%EOF".encode('ascii'))
+    return bytes(pdf_content)
+
 # --- REUSABLE FILTER FUNCTION ---
 def render_filters(key_prefix, layout="vertical"):
     if layout == "vertical":
@@ -118,92 +178,24 @@ if app_mode == "User View":
             export_data = dummy_alerts_df.to_csv(index=False).encode('utf-8')
             file_extension = "csv"
             mime_type = "text/csv"
-            
-            st.download_button(
-                label=f"⬇️ Download {export_format} Report",
-                data=export_data,
-                file_name=f"assigned_alerts_{datetime.datetime.now().strftime('%Y%m%d')}.{file_extension}",
-                mime=mime_type,
-                use_container_width=True
-            )
         else:
-            try:
-                from fpdf import FPDF
-                
-                # Custom PDF Class Design
-                class PDF(FPDF):
-                    def header(self):
-                        self.set_font('Arial', 'B', 15)
-                        self.set_text_color(30, 58, 138) # eMoldino Blue
-                        self.cell(0, 10, 'eMoldino - Alert Management Center', 0, 1, 'C')
-                        self.set_font('Arial', 'I', 11)
-                        self.set_text_color(100, 100, 100)
-                        self.cell(0, 10, 'Assigned Alerts Configuration Summary', 0, 1, 'C')
-                        self.set_font('Arial', '', 9)
-                        self.cell(0, 8, f'Generated on: {datetime.datetime.now().strftime("%Y-%m-%d %H:%M:%S")}', 0, 1, 'C')
-                        self.ln(5)
-
-                    def footer(self):
-                        self.set_y(-15)
-                        self.set_font('Arial', 'I', 8)
-                        self.set_text_color(128, 128, 128)
-                        self.cell(0, 10, f'Page {self.page_no()}', 0, 0, 'C')
-
-                # Generate PDF Document in Landscape
-                pdf = PDF(orientation='L')
-                pdf.add_page()
-                
-                # Table Header Styling
-                pdf.set_font('Arial', 'B', 9)
-                pdf.set_fill_color(240, 240, 240)
-                
-                cols = ["ID", "Alert Type", "Plant Scope", "Tooling/Part Scope", "Lvl 1 Condition", "Frequency", "Status"]
-                widths = [20, 35, 40, 45, 55, 25, 25]
-                
-                for i, col in enumerate(cols):
-                    pdf.cell(widths[i], 10, col, 1, 0, 'C', fill=True)
-                pdf.ln()
-
-                # Table Data Injection
-                pdf.set_font('Arial', '', 8)
-                for i, row in dummy_alerts_df.iterrows():
-                    pdf.cell(widths[0], 10, str(row['Alert ID']), 1, 0, 'C')
-                    pdf.cell(widths[1], 10, str(row['Alert Type']), 1, 0, 'C')
-                    pdf.cell(widths[2], 10, str(row['Plant'])[:20], 1, 0, 'C')
-                    pdf.cell(widths[3], 10, str(row['Tooling / Part'])[:22], 1, 0, 'C')
-                    pdf.cell(widths[4], 10, str(row['Level 1 Condition']), 1, 0, 'C')
-                    pdf.cell(widths[5], 10, str(row['Frequency']), 1, 0, 'C')
-                    
-                    # Color code status
-                    if row['Status'] == "Active":
-                        pdf.set_text_color(0, 128, 0)
-                    else:
-                        pdf.set_text_color(200, 0, 0)
-                        
-                    pdf.cell(widths[6], 10, str(row['Status']), 1, 0, 'C')
-                    pdf.set_text_color(0, 0, 0) # Reset color
-                    pdf.ln()
-
-                export_data = bytes(pdf.output(dest='S').encode('latin1'))
-                file_extension = "pdf"
-                mime_type = "application/pdf"
-                
-                st.download_button(
-                    label=f"⬇️ Download {export_format} Report",
-                    data=export_data,
-                    file_name=f"assigned_alerts_{datetime.datetime.now().strftime('%Y%m%d')}.{file_extension}",
-                    mime=mime_type,
-                    use_container_width=True
-                )
-                
-            except ImportError:
-                st.error("⚠️ Library 'fpdf' is missing. Please run `pip install fpdf` to enable designed PDF exports.")
+            # Generate PDF using the new built-in pure Python function!
+            export_data = generate_pure_python_pdf(dummy_alerts_df)
+            file_extension = "pdf"
+            mime_type = "application/pdf"
+            
+        st.download_button(
+            label=f"⬇️ Download {export_format} Report",
+            data=export_data,
+            file_name=f"assigned_alerts_{datetime.datetime.now().strftime('%Y%m%d')}.{file_extension}",
+            mime=mime_type,
+            use_container_width=True
+        )
         
         with st.popover("✉️ Send to Email", use_container_width=True):
             st.write("Send report to email")
             email_input = st.text_input("Email Address", value="admin.plant@emoldino.com")
             
-            # Format selection also applies to the email attachment idea
             if 'file_extension' in locals():
                 st.caption(f"Attachment: assigned_alerts.{file_extension}")
             
