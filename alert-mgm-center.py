@@ -13,7 +13,7 @@ st.set_page_config(
 # --- SESSION STATE FOR ADMIN LOGGING ---
 if 'admin_log' not in st.session_state:
     st.session_state.admin_log = pd.DataFrame(columns=[
-        "Timestamp", "Server", "User", "Alert Type", "Target Scope (Filters)", "Configuration details"
+        "Timestamp", "Server", "Users", "Alert Type", "Target Scope (Filters)", "Configuration details"
     ])
 
 # --- CUSTOM STYLING ---
@@ -120,22 +120,28 @@ def render_filters(key_prefix):
             
     return {"OEM": oem, "Supplier": sup, "Plant": plt, "Product": prod, "Tooling Type": ttype, "Part": part, "Tooling": tool}
 
-def log_admin_action(alert_type, filters, selected_server, selected_user, details="Configured successfully"):
+def log_admin_action(alert_type, filters, selected_server, selected_users, details="Configured successfully"):
+    if not selected_users:
+        st.error("⚠️ Please select at least one user from the User Assignment panel before saving.")
+        return
+        
     active_filters = {k: v for k, v in filters.items() if v}
     filter_str = " | ".join([f"{k}: {', '.join(v)}" for k, v in active_filters.items()])
     if not filter_str:
         filter_str = "Global (No filters applied)"
         
+    users_str = ", ".join(selected_users)
+        
     new_log = pd.DataFrame([{
         "Timestamp": datetime.datetime.now().strftime("%Y-%m-%d %H:%M:%S"),
         "Server": selected_server,
-        "User": selected_user,
+        "Users": users_str,
         "Alert Type": alert_type,
         "Target Scope (Filters)": filter_str,
         "Configuration details": details
     }])
     st.session_state.admin_log = pd.concat([new_log, st.session_state.admin_log], ignore_index=True)
-    st.success(f"Successfully programmed '{alert_type}' alert for {selected_user}!")
+    st.success(f"Successfully programmed '{alert_type}' alert for {len(selected_users)} user(s) on {selected_server}!")
 
 # ==========================================
 #         SIDEBAR: ADMIN & FILTERS
@@ -145,11 +151,14 @@ with st.sidebar:
     selected_server = st.selectbox("Target Server", ["JLR Server", "GM Server", "Paccar Server"])
     
     mock_users = {
-        "JLR Server": ["John Doe (john.doe@jlr.com)", "Jane Smith (jane.smith@jlr.com)"],
-        "GM Server": ["Mike Johnson (mjohnson@gm.com)", "Sarah Connor (sconnor@gm.com)"],
-        "Paccar Server": ["David Lee (d.lee@paccar.com)", "Emma Wilson (e.wilson@paccar.com)"]
+        "JLR Server": ["John Doe (john.doe@jlr.com)", "Jane Smith (jane.smith@jlr.com)", "Mark Davis (m.davis@jlr.com)"],
+        "GM Server": ["Mike Johnson (mjohnson@gm.com)", "Sarah Connor (sconnor@gm.com)", "Tom Wilson (twilson@gm.com)"],
+        "Paccar Server": ["David Lee (d.lee@paccar.com)", "Emma Wilson (e.wilson@paccar.com)", "Chris Taylor (ctaylor@paccar.com)"]
     }
-    selected_user = st.selectbox("Select User", mock_users[selected_server])
+    
+    # Multiselect for grouping users under a server
+    selected_users = st.multiselect("Select User(s)", mock_users[selected_server], default=[mock_users[selected_server][0]])
+    st.caption("You can select multiple users to apply the same configuration to an entire group.")
     
     st.divider()
     st.markdown("### Target Data Filters")
@@ -171,7 +180,7 @@ with export_col:
     st.write("")
     
     with st.popover("📥 Export Config", use_container_width=True):
-        st.caption(f"Export or email configuration summary for **{selected_user.split(' ')[0]}**.")
+        st.caption(f"Export or email configuration summary for **{len(selected_users)} selected user(s)**.")
         
         # Dummy data simulating the user's currently assigned alerts
         dummy_alerts_df = pd.DataFrame({
@@ -265,7 +274,7 @@ with tab1:
             ct_freq = st.selectbox("Alert Frequency", ["Hourly", "Daily", "Weekly", "Monthly"], key="ct_freq")
             
         if st.button("Save Cycle Time Settings", type="primary"):
-            log_admin_action("Cycle Time", user_filters, selected_server, selected_user)
+            log_admin_action("Cycle Time", user_filters, selected_server, selected_users)
 
 # --- 2. RUN RATE ---
 with tab2:
@@ -322,7 +331,7 @@ with tab2:
                 rr_freq = st.selectbox("Alert Frequency", ["Daily", "Weekly", "Monthly"], key=f"{prefix}_freq")
                 
             if st.button(f"Save {rr_type} Settings", type="primary", key=f"{prefix}_save"):
-                log_admin_action(f"Run Rate ({rr_type})", user_filters, selected_server, selected_user)
+                log_admin_action(f"Run Rate ({rr_type})", user_filters, selected_server, selected_users)
 
         with rr_tab1:
             render_run_rate_logic("Run Rate Efficiency", "eff")
@@ -383,7 +392,7 @@ with tab3:
                 cr_freq = st.selectbox("Alert Frequency", ["Daily", "Weekly", "Monthly"], key=f"{prefix}_freq")
                 
             if st.button(f"Save {cr_type} Settings", type="primary", key=f"{prefix}_save"):
-                log_admin_action(f"Capacity Risk ({cr_type})", user_filters, selected_server, selected_user)
+                log_admin_action(f"Capacity Risk ({cr_type})", user_filters, selected_server, selected_users)
 
         with cr_tab1:
             render_capacity_logic("Optimal Capacity", "opt")
@@ -419,7 +428,7 @@ with tab4:
                 st.write("**Utilization Rate (%) Limits**")
                 st.write("Set the base starting percentage, followed by the upper limits for each level.")
                 
-                base_start = st.number_input("Start Monitoring At (% of max shots)", min_value=0, max_value=99, value=80, key="eol_base")
+                base_start = st.number_input("Start Monitoring At (% of forecasted max shot)", min_value=0, max_value=99, value=80, key="eol_base")
                 
                 prev_val = base_start
                 eol_cols = st.columns(eol_num)
@@ -460,7 +469,7 @@ with tab4:
                         lower = base_start if i == 0 else util_limits[i-1]
                         upper = util_limits[i]
                         op = "≤" if i == 0 else "<"
-                        conds.append(f"Shots are between **{lower}% and {upper}%** of maximum.\n\n`{lower}% {op} shots ≤ {upper}%`")
+                        conds.append(f"Shots are between **{lower}% and {upper}%** of forecasted max shot.\n\n`{lower}% {op} shots ≤ {upper}%`")
                     if show_days:
                         upper_d = 365 if i == 0 else days_limits[i-1]
                         lower_d = days_limits[i]
@@ -473,7 +482,7 @@ with tab4:
             eol_freq = st.selectbox("Alert Frequency", ["Daily", "Weekly", "Monthly"], key="eol_freq")
             
         if st.button("Save Tooling EOL Settings", type="primary"):
-            log_admin_action("Tooling End of Life", user_filters, selected_server, selected_user, details=f"Mode: {eol_mode}")
+            log_admin_action("Tooling End of Life", user_filters, selected_server, selected_users, details=f"Mode: {eol_mode}")
 
 # --- 5. OPERATION STATUS ---
 with tab5:
@@ -488,7 +497,6 @@ with tab5:
             
             st.checkbox("Tool Starts Producing", 
                         value=True, 
-                        disabled=True, 
                         help="Triggered by a run interval threshold indicating the start of a new production run. This is defined and integrated directly within the Run Rate application.")
             st.caption("*'Tool Starts Producing' is managed and configured directly through the Run Rate system logic.*")
             
@@ -496,7 +504,6 @@ with tab5:
             
             st.checkbox("Tool Stops", 
                         value=False, 
-                        disabled=True, 
                         help="Triggered via Tool Movement Detection (TMD). Will be enabled once the TMD feature is fully implemented.")
             st.caption("*'Tool Stops' capability is pending Tool Movement Detection (TMD) module availability.*")
             
@@ -512,16 +519,37 @@ with tab5:
                 st.selectbox("Alert Frequency", ["Daily", "Weekly", "Monthly", "Real time"], index=3, key="os_freq")
                 
         if st.button("Save Operation Status Settings", type="primary"):
-            log_admin_action("Operation Status", user_filters, selected_server, selected_user)
+            log_admin_action("Operation Status", user_filters, selected_server, selected_users)
 
 # ==========================================
-#        ADMIN LOG DISPLAY
+#        GLOBAL CONFIGURATIONS DASHBOARD
 # ==========================================
 st.divider()
-st.markdown("### 📋 Programmed Alerts Log")
-st.caption("Audit trail of all configurations applied by administrators during this session.")
+st.markdown("### 🌐 Global Configurations Dashboard")
+st.caption("A comprehensive view of all active alert configurations across all servers and user groups.")
 
 if st.session_state.admin_log.empty:
-    st.info("No alerts have been configured yet in this session.")
+    st.info("No configurations have been applied yet in this session.")
 else:
-    st.dataframe(st.session_state.admin_log, use_container_width=True, hide_index=True)
+    # Filter controls for the dashboard
+    f_col1, f_col2 = st.columns(2)
+    with f_col1:
+        server_filter = st.multiselect("Filter by Server", options=st.session_state.admin_log['Server'].unique(), default=[])
+    
+    # Apply filtering
+    display_df = st.session_state.admin_log
+    if server_filter:
+        display_df = display_df[display_df['Server'].isin(server_filter)]
+        
+    st.dataframe(
+        display_df, 
+        use_container_width=True, 
+        hide_index=True,
+        column_config={
+            "Timestamp": st.column_config.DatetimeColumn("Date & Time", format="YYYY-MM-DD h:mm A"),
+            "Server": st.column_config.TextColumn("Target Server"),
+            "Users": st.column_config.TextColumn("Assigned User Groups"),
+            "Alert Type": st.column_config.TextColumn("Alert Type"),
+            "Target Scope (Filters)": st.column_config.TextColumn("Filters Applied")
+        }
+    )
