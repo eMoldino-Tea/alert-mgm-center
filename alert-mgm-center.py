@@ -141,7 +141,6 @@ def log_admin_action(alert_type, filters, selected_server, selected_user, detail
 #         SIDEBAR: ADMIN & FILTERS
 # ==========================================
 with st.sidebar:
-    st.image("https://via.placeholder.com/200x60?text=EMOLDINO", use_container_width=True)
     st.markdown("### User Assignment")
     selected_server = st.selectbox("Target Server", ["JLR Server", "GM Server", "Paccar Server"])
     
@@ -276,7 +275,7 @@ with tab2:
     rr_enabled = st.toggle("Enable Run Rate Alerts", value=True, key="rr_toggle")
     
     if rr_enabled:
-        rr_tab1, rr_tab2 = st.tabs(["📉 Low Run Rate Efficiency", "⚖️ Low Run Rate Stability"])
+        rr_tab1, rr_tab2 = st.tabs(["Low Run Rate Efficiency", "Low Run Rate Stability"])
         
         # Helper to render Run Rate logic dynamically for both tabs
         def render_run_rate_logic(rr_type, prefix):
@@ -284,7 +283,7 @@ with tab2:
                 st.markdown("##### 'No Alert' Zone")
                 st.write(f"Alerts will be suppressed when {rr_type.lower()} stays above this value.")
                 no_alert_zone = st.number_input("No Alert Zone (Above %)", min_value=1, max_value=100, value=85, key=f"{prefix}_no_alert")
-                st.info(f"🟢 Production is considered **Healthy** when {rr_type.lower()} is **≥ {no_alert_zone}%**.")
+                st.info(f"Production is considered **Healthy** when {rr_type.lower()} is **≥ {no_alert_zone}%**.")
                 st.divider()
 
                 st.markdown("##### Configuration: Number of Levels")
@@ -338,7 +337,7 @@ with tab3:
     cr_enabled = st.toggle("Enable Capacity Risk Alerts", value=True, key="cr_toggle")
     
     if cr_enabled:
-        cr_tab1, cr_tab2 = st.tabs(["📉 Lost parts vs Optimal Capacity", "🎯 Lost parts vs Target Capacity"])
+        cr_tab1, cr_tab2 = st.tabs(["Lost parts vs Optimal Capacity", "Lost parts vs Target Capacity"])
         
         def render_capacity_logic(cr_type, prefix, is_target=False):
             with st.container(border=True):
@@ -464,19 +463,19 @@ with tab5:
         with st.container(border=True):
             st.markdown("##### Real-Time Event Alerts")
             
-            st.checkbox("🟢 Tool Starts Producing", 
+            st.checkbox("Tool Starts Producing", 
                         value=True, 
                         disabled=True, 
                         help="Triggered by a run interval threshold indicating the start of a new production run. This is defined and integrated directly within the Run Rate application.")
-            st.caption("ℹ️ *'Tool Starts Producing' is managed and configured directly through the Run Rate system logic.*")
+            st.caption("*'Tool Starts Producing' is managed and configured directly through the Run Rate system logic.*")
             
             st.write("")
             
-            st.checkbox("🔴 Tool Stops", 
+            st.checkbox("Tool Stops", 
                         value=False, 
                         disabled=True, 
                         help="Triggered via Tool Movement Detection (TMD). Will be enabled once the TMD feature is fully implemented.")
-            st.caption("ℹ️ *'Tool Stops' capability is pending Tool Movement Detection (TMD) module availability.*")
+            st.caption("*'Tool Stops' capability is pending Tool Movement Detection (TMD) module availability.*")
             
             st.divider()
 
