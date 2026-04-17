@@ -411,25 +411,45 @@ with tab4:
             st.markdown("##### Configuration: Number of Levels")
             eol_num = st.number_input("How many alert levels do you want to configure?", min_value=1, max_value=5, value=2, key="eol_num_levels")
             
+            st.markdown("##### Threshold Boundaries")
+            
             util_limits, days_limits = [], []
             
-            for i in range(eol_num):
-                st.markdown(f"**Level {i+1} Definition**")
-                cols = st.columns(2)
+            if show_util:
+                st.write("**Utilization Rate (%) Limits**")
+                st.write("Set the base starting percentage, followed by the upper limits for each level.")
                 
-                with cols[0]:
-                    if show_util:
-                        prev_u = 0 if i == 0 else util_limits[i-1]
-                        val_u = st.number_input(f"Level {i+1} Utilization Limit (%)", min_value=prev_u + 1, max_value=200, value=min(200, prev_u + 10), key=f"eol_u_{i}")
-                        util_limits.append(val_u)
+                base_start = st.number_input("Start Monitoring At (% of max shots)", min_value=0, max_value=99, value=80, key="eol_base")
                 
-                with cols[1]:
-                    if show_days:
-                        # Days count backwards (e.g., alert when 30 days left, then 10 days left)
-                        prev_d = 365 if i == 0 else days_limits[i-1]
+                prev_val = base_start
+                eol_cols = st.columns(eol_num)
+                
+                for i in range(eol_num):
+                    with eol_cols[i]:
+                        c_min = min(200, prev_val + 1)
+                        def_val = min(200, max(c_min, prev_val + 10))
+                        val = st.number_input(f"Level {i+1} Upper Limit (%)", 
+                                              min_value=c_min, 
+                                              max_value=200, 
+                                              value=def_val, 
+                                              key=f"eol_limit_{i}")
+                        util_limits.append(val)
+                        prev_val = val
+                st.write("")
+                
+            if show_days:
+                st.write("**Remaining Days Limits**")
+                st.write("Set the limits for each level. Days count backwards (e.g., alert when 30 days left, then 15 days left).")
+                
+                prev_d = 365
+                days_cols = st.columns(eol_num)
+                
+                for i in range(eol_num):
+                    with days_cols[i]:
                         c_max = max(0, prev_d - 1)
                         val_d = st.number_input(f"Level {i+1} Remaining Days Limit", min_value=0, max_value=c_max, value=max(0, c_max - 15), key=f"eol_d_{i}")
                         days_limits.append(val_d)
+                        prev_d = val_d
             
             st.markdown("##### Alert Conditions Summary")
             eol_disp_cols = st.columns(eol_num)
@@ -437,13 +457,16 @@ with tab4:
                 with eol_disp_cols[i]:
                     conds = []
                     if show_util:
-                        lower_u = 0 if i == 0 else util_limits[i-1]
-                        conds.append(f"Utilization reaches **{lower_u}% to {util_limits[i]}%**")
+                        lower = base_start if i == 0 else util_limits[i-1]
+                        upper = util_limits[i]
+                        op = "≤" if i == 0 else "<"
+                        conds.append(f"Shots are between **{lower}% and {upper}%** of maximum.\n\n`{lower}% {op} shots ≤ {upper}%`")
                     if show_days:
                         upper_d = 365 if i == 0 else days_limits[i-1]
-                        conds.append(f"Remaining days fall to **{days_limits[i]} to {upper_d} days**")
+                        lower_d = days_limits[i]
+                        conds.append(f"Remaining days fall between **{upper_d} and {lower_d} days**.")
                     
-                    txt = f"**Level {i+1}**\n\nTriggers when:\n\n" + " \n\n**OR**\n\n ".join(conds)
+                    txt = f"**Level {i+1}**\n\nTriggers when:\n\n" + "\n\n**OR**\n\n".join(conds)
                     display_level_box(i, txt)
 
             st.divider()
