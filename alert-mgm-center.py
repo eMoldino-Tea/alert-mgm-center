@@ -179,9 +179,6 @@ if app_mode == "User View":
                 "Status": ["Active", "Active", "Inactive", "Active", "Active"],
                 "Last Modified": ["2026-04-10", "2026-04-12", "2026-04-14", "2026-04-15", "2026-04-16"]
             })
-            
-            with st.expander("Preview Data"):
-                st.dataframe(dummy_alerts_df, use_container_width=True)
 
             export_format = st.radio("Format", ["CSV", "PDF"], horizontal=True, label_visibility="collapsed")
             
