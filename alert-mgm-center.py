@@ -10,6 +10,13 @@ st.set_page_config(
     initial_sidebar_state="expanded"
 )
 
+# --- GRACEFUL PDF LIBRARY IMPORT ---
+try:
+    from fpdf import FPDF
+    FPDF_AVAILABLE = True
+except ImportError:
+    FPDF_AVAILABLE = False
+
 # --- SESSION STATE FOR ADMIN LOGGING ---
 if 'admin_log' not in st.session_state:
     st.session_state.admin_log = pd.DataFrame(columns=[
@@ -47,65 +54,119 @@ def display_level_box(level_idx, markdown_text):
     else:
         st.error(markdown_text)
 
-# --- PURE PYTHON PDF GENERATOR (ZERO DEPENDENCIES) ---
-def generate_pure_python_pdf(df):
-    """Generates a valid PDF byte string from a DataFrame without external libraries."""
-    cols_to_print = ["Alert ID", "Alert Type", "Plant", "Tooling / Part", "Level 1 Condition", "Status"]
-    widths = [12, 18, 12, 20, 22, 10]
-    
-    lines = []
-    lines.append("eMoldino - Alert Management Center")
-    lines.append("Assigned Alerts Configuration Summary")
-    lines.append(f"Generated on: {datetime.datetime.now().strftime('%Y-%m-%d %H:%M:%S')}")
-    lines.append("")
-    
-    # Format header
-    header = "".join([cols_to_print[i].ljust(widths[i]) for i in range(len(cols_to_print))])
-    lines.append(header)
-    lines.append("-" * sum(widths))
-    
-    # Format rows
-    for _, row in df.iterrows():
-        row_str = "".join([str(row[cols_to_print[i]])[:widths[i]-1].ljust(widths[i]) for i in range(len(cols_to_print))])
-        lines.append(row_str)
-        
-    # Build raw PDF stream
-    stream_data = "BT\n/F1 11 Tf\n30 540 Td\n15 TL\n"
-    for line in lines:
-        clean_line = line.replace('\\', '\\\\').replace('(', '\\(').replace(')', '\\)')
-        stream_data += f"({clean_line}) Tj\nT*\n"
-    stream_data += "ET"
-    
-    stream_bytes = stream_data.encode('latin-1', 'replace')
-    
-    # Build PDF Objects
-    objects = [
-        b"%PDF-1.4\n",
-        b"1 0 obj\n<< /Type /Catalog /Pages 2 0 R >>\nendobj\n",
-        b"2 0 obj\n<< /Type /Pages /Kids [3 0 R] /Count 1 >>\nendobj\n",
-        b"3 0 obj\n<< /Type /Page /Parent 2 0 R /MediaBox [0 0 842 595] /Contents 4 0 R /Resources << /Font << /F1 5 0 R >> >> >>\nendobj\n",
-        f"4 0 obj\n<< /Length {len(stream_bytes)} >>\nstream\n".encode('ascii') + stream_bytes + b"\nendstream\nendobj\n",
-        b"5 0 obj\n<< /Type /Font /Subtype /Type1 /BaseFont /Courier >>\nendobj\n"
-    ]
-    
-    # Compile file structure & XREF table
-    pdf_content = bytearray()
-    xref_offsets = []
-    
-    for obj in objects:
-        if obj.startswith(b"%PDF"):
-            pdf_content.extend(obj)
-        else:
-            xref_offsets.append(len(pdf_content))
-            pdf_content.extend(obj)
+# --- ADVANCED PDF GENERATOR WITH DASHBOARD (REQUIRES FPDF) ---
+def generate_fpdf_report(df):
+    class PDF(FPDF):
+        def header(self):
+            # Report Header
+            self.set_font('Arial', 'B', 16)
+            self.set_text_color(30, 58, 138) # eMoldino Blue
+            self.cell(0, 10, 'eMoldino - Alert Management Center', 0, 1, 'C')
+            self.set_font('Arial', '', 10)
+            self.set_text_color(100, 100, 100)
+            self.cell(0, 8, f'Generated on: {datetime.datetime.now().strftime("%Y-%m-%d %H:%M:%S")}', 0, 1, 'C')
+            self.ln(5)
+
+        def chapter_title(self, title):
+            self.set_font('Arial', 'B', 14)
+            self.set_fill_color(230, 230, 230)
+            self.set_text_color(0, 0, 0)
+            self.cell(0, 10, f' {title}', 0, 1, 'L', 1)
+            self.ln(4)
             
-    xref_start = len(pdf_content)
-    pdf_content.extend(b"xref\n0 6\n0000000000 65535 f \n")
-    for offset in xref_offsets:
-        pdf_content.extend(f"{offset:010d} 00000 n \n".encode('ascii'))
+        def section_title(self, title):
+            self.set_font('Arial', 'B', 12)
+            self.set_text_color(30, 58, 138)
+            self.cell(0, 8, title, 0, 1, 'L')
+            
+        def dashboard_row(self, label, value):
+            self.set_x(20) # Indent
+            self.set_font('Arial', '', 11)
+            self.set_text_color(50, 50, 50)
+            self.cell(110, 6, label, 0, 0)
+            self.set_font('Arial', 'B', 11)
+            self.set_text_color(0, 0, 0)
+            self.cell(30, 6, str(value), 0, 1, 'R')
+
+    pdf = PDF()
+    pdf.add_page()
+    
+    # ==========================================
+    # PAGE 1: TRIGGERED ALERTS DASHBOARD
+    # ==========================================
+    pdf.chapter_title("TRIGGERED ALERTS DASHBOARD SUMMARY")
+    
+    # 1. Cycle Time
+    pdf.section_title("1. Cycle Time")
+    pdf.dashboard_row("Level 1 (Warning):", "14 Tools")
+    pdf.dashboard_row("Level 2 (Critical):", "5 Tools")
+    pdf.ln(4)
+    
+    # 2. Run Rate
+    pdf.section_title("2. Run Rate")
+    pdf.dashboard_row("Low Run Rate - Shot Efficiency:", "22 Tools")
+    pdf.dashboard_row("Low Run Rate - Time Stability:", "8 Tools")
+    pdf.ln(4)
+    
+    # 3.1 Capacity Risk (Optimal)
+    pdf.section_title("3.1 Capacity Risk (Lost Parts vs. Optimal Capacity)")
+    pdf.dashboard_row("Level 1 (Warning):", "3 Tools")
+    pdf.dashboard_row("Level 2 (Critical):", "1 Tools")
+    pdf.ln(4)
+    
+    # 3.2 Capacity Risk (Target)
+    pdf.section_title("3.2 Capacity Risk (Lost Parts vs. Target Capacity)")
+    pdf.dashboard_row("Level 1 (Warning):", "6 Tools")
+    pdf.dashboard_row("Level 2 (Critical):", "2 Tools")
+    pdf.ln(4)
+    
+    # 4. Tooling End of Life
+    pdf.section_title("4. Tooling End of Life")
+    pdf.dashboard_row("Level 1 (Warning):", "12 Tools")
+    pdf.dashboard_row("Level 2 (Critical):", "4 Tools")
+    pdf.ln(4)
+    
+    # 5. Operation Status
+    pdf.section_title("5. Operation Status")
+    pdf.dashboard_row("Inactive:", "19 Tools")
+    pdf.dashboard_row("Sensor Offline:", "7 Tools")
+    pdf.dashboard_row("Sensor Detached:", "2 Tools")
+    
+    # ==========================================
+    # PAGE 2: ACTIVE CONFIGURATIONS SUMMARY
+    # ==========================================
+    pdf.add_page()
+    pdf.chapter_title("ACTIVE CONFIGURATIONS SUMMARY")
+    
+    # Table Header
+    pdf.set_font('Arial', 'B', 9)
+    pdf.set_fill_color(30, 58, 138)
+    pdf.set_text_color(255, 255, 255)
+    
+    cols = ["Alert ID", "Alert Type", "Plant", "Tooling / Part", "Level 1 Cond", "Status"]
+    col_widths = [20, 30, 20, 40, 60, 20]
+    
+    for i in range(len(cols)):
+        pdf.cell(col_widths[i], 8, cols[i], 1, 0, 'C', 1)
+    pdf.ln()
+    
+    # Table Rows
+    pdf.set_font('Arial', '', 8)
+    pdf.set_text_color(0, 0, 0)
+    
+    for _, row in df.iterrows():
+        pdf.cell(col_widths[0], 8, str(row["Alert ID"])[:15], 1)
+        pdf.cell(col_widths[1], 8, str(row["Alert Type"])[:20], 1)
+        pdf.cell(col_widths[2], 8, str(row["Plant"])[:12], 1)
+        pdf.cell(col_widths[3], 8, str(row["Tooling / Part"])[:25], 1)
+        pdf.cell(col_widths[4], 8, str(row["Level 1 Condition"])[:40], 1)
+        pdf.cell(col_widths[5], 8, str(row["Status"]), 1)
+        pdf.ln()
         
-    pdf_content.extend(f"trailer\n<< /Size 6 /Root 1 0 R >>\nstartxref\n{xref_start}\n%%EOF".encode('ascii'))
-    return bytes(pdf_content)
+    try:
+        return bytes(pdf.output())
+    except TypeError:
+        return pdf.output(dest='S').encode('latin-1')
 
 # --- REUSABLE FILTER FUNCTION ---
 def render_filters(key_prefix):
@@ -206,18 +267,26 @@ if page == "Configuration Management":
                 export_data = dummy_alerts_df.to_csv(index=False).encode('utf-8')
                 file_extension = "csv"
                 mime_type = "text/csv"
-            else:
-                export_data = generate_pure_python_pdf(dummy_alerts_df)
-                file_extension = "pdf"
-                mime_type = "application/pdf"
                 
-            st.download_button(
-                label=f"⬇️ Download {export_format}",
-                data=export_data,
-                file_name=f"assigned_alerts_{datetime.datetime.now().strftime('%Y%m%d')}.{file_extension}",
-                mime=mime_type,
-                use_container_width=True
-            )
+                st.download_button(
+                    label="⬇️ Download CSV",
+                    data=export_data,
+                    file_name=f"assigned_alerts_{datetime.datetime.now().strftime('%Y%m%d')}.csv",
+                    mime=mime_type,
+                    use_container_width=True
+                )
+            else:
+                if FPDF_AVAILABLE:
+                    export_data = generate_fpdf_report(dummy_alerts_df)
+                    st.download_button(
+                        label="⬇️ Download PDF Report",
+                        data=export_data,
+                        file_name=f"assigned_alerts_{datetime.datetime.now().strftime('%Y%m%d')}.pdf",
+                        mime="application/pdf",
+                        use_container_width=True
+                    )
+                else:
+                    st.warning("⚠️ The `fpdf` library is required to generate the PDF Dashboard. Please run `pip install fpdf`.")
             
             st.divider()
             st.write("✉️ Send to Email")
