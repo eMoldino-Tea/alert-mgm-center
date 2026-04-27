@@ -285,12 +285,12 @@ if page == "Configuration Management":
     # --- 2. RUN RATE ---
     with tab2:
         st.subheader("Run Rate Alerts")
-        st.write("Alerts based on Run Rate Efficiency and Stability.")
+        st.write("Alerts based on Run Rate Shot Efficiency and Time Stability.")
         
         rr_enabled = st.toggle("Enable Run Rate Alerts", value=True, key="rr_toggle")
         
         if rr_enabled:
-            rr_tab1, rr_tab2 = st.tabs(["Low Run Rate Efficiency", "Low Run Rate Stability"])
+            rr_tab1, rr_tab2 = st.tabs(["Low Run Rate Shot Efficiency", "Low Run Rate Time Stability"])
             
             # Helper to render Run Rate logic dynamically for both tabs
             def render_run_rate_logic(rr_type, prefix):
@@ -340,9 +340,9 @@ if page == "Configuration Management":
                     log_admin_action(f"Run Rate ({rr_type})", user_filters, selected_server, selected_users)
 
             with rr_tab1:
-                render_run_rate_logic("Run Rate Efficiency", "eff")
+                render_run_rate_logic("Run Rate Shot Efficiency", "eff")
             with rr_tab2:
-                render_run_rate_logic("Run Rate Stability", "stab")
+                render_run_rate_logic("Run Rate Time Stability", "stab")
 
     # --- 3. CAPACITY RISK ---
     with tab3:
