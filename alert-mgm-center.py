@@ -80,19 +80,47 @@ def generate_fpdf_report(df):
             self.cell(0, 10, f' {clean(title)}', 0, 1, 'L', 1)
             self.ln(4)
             
-        def section_title(self, title):
-            self.set_font('Arial', 'B', 12)
+        def dash_card(self, x, y, w, title, data_dict):
+            """Draws a clean summary card with mini bar charts"""
+            # Draw Card Header
+            self.set_xy(x, y)
+            self.set_font('Arial', 'B', 10)
+            self.set_fill_color(240, 244, 248) # Light blue header
             self.set_text_color(30, 58, 138)
-            self.cell(0, 8, clean(title), 0, 1, 'L')
+            self.cell(w, 8, f" {clean(title)}", border=1, ln=2, fill=True)
             
-        def dashboard_row(self, label, value):
-            self.set_x(20) # Indent
-            self.set_font('Arial', '', 11)
+            # Draw Card Content
+            self.set_fill_color(255, 255, 255)
             self.set_text_color(50, 50, 50)
-            self.cell(110, 6, clean(label), 0, 0)
-            self.set_font('Arial', 'B', 11)
-            self.set_text_color(0, 0, 0)
-            self.cell(30, 6, clean(value), 0, 1, 'R')
+            self.set_font('Arial', '', 9)
+            
+            start_y = self.get_y()
+            max_val = max(list(data_dict.values()) + [1]) # Dynamic scaling for bars
+            
+            for idx, (label, val) in enumerate(data_dict.items()):
+                cur_y = start_y + (idx * 8)
+                
+                # Label
+                self.set_xy(x + 2, cur_y + 1)
+                self.cell(w/2 - 2, 6, clean(label), border=0)
+                
+                # Count Value
+                self.set_xy(x + w/2, cur_y + 1)
+                self.set_font('Arial', 'B', 9)
+                self.cell(10, 6, str(val), border=0, align='R')
+                self.set_font('Arial', '', 9)
+                
+                # Visual Bar Chart
+                bar_max_w = (w / 2) - 15
+                bar_w = (val / max_val) * bar_max_w
+                self.set_fill_color(59, 130, 246) # Tailwind blue
+                self.rect(x + w/2 + 12, cur_y + 2.5, bar_w, 3, 'F')
+                
+            # Outline Border
+            total_h = 8 + (len(data_dict) * 8) + 2
+            self.rect(x, y, w, total_h)
+            
+            return y + total_h + 5 # Return Y coordinate for next element
 
     pdf = PDF()
     pdf.add_page()
@@ -102,41 +130,43 @@ def generate_fpdf_report(df):
     # ==========================================
     pdf.chapter_title("TRIGGERED ALERTS DASHBOARD SUMMARY")
     
-    # 1. Cycle Time
-    pdf.section_title("1. Cycle Time")
-    pdf.dashboard_row("Level 1 (Warning):", "14 Tools")
-    pdf.dashboard_row("Level 2 (Critical):", "5 Tools")
-    pdf.ln(4)
+    y_start = pdf.get_y() + 4
+    card_width = 90
+    col1_x = 10
+    col2_x = 110
     
-    # 2. Run Rate
-    pdf.section_title("2. Run Rate")
-    pdf.dashboard_row("Low Run Rate - Shot Efficiency:", "22 Tools")
-    pdf.dashboard_row("Low Run Rate - Time Stability:", "8 Tools")
-    pdf.ln(4)
+    # ROW 1: Cycle Time & Run Rate
+    y_next_l = pdf.dash_card(col1_x, y_start, card_width, "1. Cycle Time", {
+        "Level 1": 14, 
+        "Level 2": 5
+    })
+    y_next_r = pdf.dash_card(col2_x, y_start, card_width, "2. Run Rate", {
+        "Low Shot Efficiency": 22, 
+        "Low Time Stability": 8
+    })
     
-    # 3.1 Capacity Risk (Optimal)
-    pdf.section_title("3.1 Capacity Risk (Lost Parts vs. Optimal Capacity)")
-    pdf.dashboard_row("Level 1 (Warning):", "3 Tools")
-    pdf.dashboard_row("Level 2 (Critical):", "1 Tools")
-    pdf.ln(4)
+    # ROW 2: Capacity Risk
+    y_row2 = max(y_next_l, y_next_r)
+    y_next_l = pdf.dash_card(col1_x, y_row2, card_width, "3.1 Capacity Risk (Optimal Capacity)", {
+        "Level 1": 3, 
+        "Level 2": 1
+    })
+    y_next_r = pdf.dash_card(col2_x, y_row2, card_width, "3.2 Capacity Risk (Target Capacity)", {
+        "Level 1": 6, 
+        "Level 2": 2
+    })
     
-    # 3.2 Capacity Risk (Target)
-    pdf.section_title("3.2 Capacity Risk (Lost Parts vs. Target Capacity)")
-    pdf.dashboard_row("Level 1 (Warning):", "6 Tools")
-    pdf.dashboard_row("Level 2 (Critical):", "2 Tools")
-    pdf.ln(4)
-    
-    # 4. Tooling End of Life
-    pdf.section_title("4. Tooling End of Life")
-    pdf.dashboard_row("Level 1 (Warning):", "12 Tools")
-    pdf.dashboard_row("Level 2 (Critical):", "4 Tools")
-    pdf.ln(4)
-    
-    # 5. Operation Status
-    pdf.section_title("5. Operation Status")
-    pdf.dashboard_row("Inactive:", "19 Tools")
-    pdf.dashboard_row("Sensor Offline:", "7 Tools")
-    pdf.dashboard_row("Sensor Detached:", "2 Tools")
+    # ROW 3: EOL & Operation Status
+    y_row3 = max(y_next_l, y_next_r)
+    pdf.dash_card(col1_x, y_row3, card_width, "4. Tooling End of Life", {
+        "Level 1": 12, 
+        "Level 2": 4
+    })
+    pdf.dash_card(col2_x, y_row3, card_width, "5. Operation Status", {
+        "Inactive": 19, 
+        "Sensor Offline": 7, 
+        "Sensor Detached": 2
+    })
     
     # ==========================================
     # PAGE 2: ACTIVE CONFIGURATIONS SUMMARY
