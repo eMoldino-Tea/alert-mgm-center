@@ -791,12 +791,27 @@ elif page == "Client Alerts Portal":
             return val
             
         # Helper function to render the structured hierarchy tables
-        def render_alert_hierarchy(tab_df):
+        def render_alert_hierarchy(tab_df, tab_name):
             if tab_df.empty:
                 st.info("No alerts found for this category with the current filters.")
                 return
             
-            tab_df['Exact calculation/value'] = tab_df.apply(format_trigger_value, axis=1)
+            # Interactive Frequency Filter
+            available_freqs = sorted(tab_df['Frequency'].unique())
+            selected_freqs = st.multiselect(
+                f"Filter by Alert Frequency", 
+                options=available_freqs, 
+                default=available_freqs, 
+                key=f"freq_filter_{tab_name}"
+            )
+            
+            filtered_df = tab_df[tab_df['Frequency'].isin(selected_freqs)].copy()
+            
+            if filtered_df.empty:
+                st.info("No alerts match the selected frequency.")
+                return
+                
+            filtered_df['Exact calculation/value'] = filtered_df.apply(format_trigger_value, axis=1)
             
             # Map mock data columns to the requested table columns
             display_cols = {
@@ -811,31 +826,28 @@ elif page == "Client Alerts Portal":
                 "Alert ID": "Alert ID" # Kept for drill-down reference
             }
             
-            for freq in sorted(tab_df['Frequency'].unique()):
-                st.markdown(f"#### 🕒 Frequency: {freq}")
-                freq_df = tab_df[tab_df['Frequency'] == freq]
+            # Display Tables group exactly by Severity (as requested)
+            for sev in sorted(filtered_df['Severity'].unique()):
+                st.markdown(f"#### 📌 {sev}")
+                sev_df = filtered_df[filtered_df['Severity'] == sev]
                 
-                for sev in sorted(freq_df['Severity'].unique()):
-                    st.markdown(f"##### 📌 {sev}")
-                    sev_df = freq_df[freq_df['Severity'] == sev]
-                    
-                    out_df = sev_df[list(display_cols.keys())].rename(columns=display_cols)
-                    st.dataframe(out_df, use_container_width=True, hide_index=True)
-                    st.write("")
+                out_df = sev_df[list(display_cols.keys())].rename(columns=display_cols)
+                st.dataframe(out_df, use_container_width=True, hide_index=True)
+                st.write("")
 
         # Create separate tabs for each Alert Type
         cat_tabs = st.tabs(["Cycle Time", "Run Rate", "Capacity Risk", "Tooling End of Life", "Operation Status"])
         
         with cat_tabs[0]:
-            render_alert_hierarchy(df[df['Alert Type'] == 'Cycle Time'])
+            render_alert_hierarchy(df[df['Alert Type'] == 'Cycle Time'], "Cycle Time")
         with cat_tabs[1]:
-            render_alert_hierarchy(df[df['Alert Type'].str.contains('Run Rate')])
+            render_alert_hierarchy(df[df['Alert Type'].str.contains('Run Rate')], "Run Rate")
         with cat_tabs[2]:
-            render_alert_hierarchy(df[df['Alert Type'].str.contains('Capacity Risk')])
+            render_alert_hierarchy(df[df['Alert Type'].str.contains('Capacity Risk')], "Capacity Risk")
         with cat_tabs[3]:
-            render_alert_hierarchy(df[df['Alert Type'].str.contains('EOL')])
+            render_alert_hierarchy(df[df['Alert Type'].str.contains('EOL')], "EOL")
         with cat_tabs[4]:
-            render_alert_hierarchy(df[df['Alert Type'].str.contains('Operation Status')])
+            render_alert_hierarchy(df[df['Alert Type'].str.contains('Operation Status')], "Operation Status")
         
         st.divider()
         st.markdown("#### 📄 Drill-down into Alert Details")
