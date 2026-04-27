@@ -235,7 +235,7 @@ def generate_fpdf_report(df):
     pdf.set_fill_color(30, 58, 138)
     pdf.set_text_color(255, 255, 255)
     
-    cols = ["Alert ID", "Alert Type", "Plant", "Tooling / Part", "Level 1 Cond", "Status"]
+    cols = ["Alert Name", "Alert Type", "Plant", "Tooling / Part", "Level 1 Cond", "Status"]
     col_widths = [30, 40, 30, 60, 80, 30] # Fits Landscape (270mm total)
     
     for i in range(len(cols)):
@@ -247,7 +247,7 @@ def generate_fpdf_report(df):
     pdf.set_text_color(0, 0, 0)
     
     for _, row in df.iterrows():
-        pdf.cell(col_widths[0], 8, clean(str(row["Alert ID"])[:20]), 1)
+        pdf.cell(col_widths[0], 8, clean(str(row["Alert Name"])[:20]), 1)
         pdf.cell(col_widths[1], 8, clean(str(row["Alert Type"])[:25]), 1)
         pdf.cell(col_widths[2], 8, clean(str(row["Plant"])[:20]), 1)
         pdf.cell(col_widths[3], 8, clean(str(row["Tooling / Part"])[:40]), 1)
@@ -356,7 +356,7 @@ if page == "Configuration Management":
             
             # Dummy data simulating the user's currently assigned alerts
             dummy_alerts_df = pd.DataFrame({
-                "Alert ID": ["ALT-1024", "ALT-1025", "ALT-1026", "ALT-1027", "ALT-1028"],
+                "Alert Name": ["Cycle Time Dev Tool A", "Low Run Rate Tool B", "Capacity Risk Tool D", "EOL Tool C", "Status Sensor Offline"],
                 "Alert Type": ["Cycle Time", "Run Rate", "Capacity Risk", "Tooling EOL", "Operation Status"],
                 "OEM Division": ["Div A", "All", "Div B", "All", "Div C"],
                 "Supplier": ["Supplier X", "All", "Supplier Y", "Supplier Z", "All"],
@@ -753,15 +753,15 @@ elif page == "Client Alerts Portal":
         st.session_state.selected_alert_id = alert_id
 
     # ---------------------------------------------------------
-    # MAIN LISTING PAGE
+    # MAIN LISTING PAGE & OVERVIEW DASHBOARD
     # ---------------------------------------------------------
     if st.session_state.client_portal_view == "list":
-        st.markdown('<div class="main-header">My Active Alerts</div>', unsafe_allow_html=True)
+        st.markdown('<div class="main-header">My Alerts Portal</div>', unsafe_allow_html=True)
         st.markdown('<div class="sub-header">Review, filter, and drill-down into triggered alerts relevant to your assigned scope.</div>', unsafe_allow_html=True)
         
         df = st.session_state.client_alerts_db.copy()
         
-        # Apply filters from the sidebar
+        # Apply global filters from the sidebar
         if client_filters.get("OEM"): 
             df = df[df['OEM Division'].isin(client_filters["OEM"])]
         if client_filters.get("Supplier"): 
@@ -780,7 +780,6 @@ elif page == "Client Alerts Portal":
         if search_query:
             df = df[df.apply(lambda row: row.astype(str).str.contains(search_query, case=False).any(), axis=1)]
 
-        st.write(f"**Total Active Alerts in Scope: {len(df)}**")
         st.write("")
         
         # Helper function to format the trigger values
@@ -860,9 +859,6 @@ elif page == "Client Alerts Portal":
                         display_cols["Tooling Status"] = "Tooling Status"
                         display_cols["Metric_1"] = "Date & Time"
                     
-                    # Keep Alert ID for the drill-down reference
-                    display_cols["Alert ID"] = "Alert ID" 
-                    
                     out_df = type_df[list(display_cols.keys())].rename(columns=display_cols)
                     
                     # If multiple logic types exist in the same severity section, show sub-header
@@ -872,45 +868,127 @@ elif page == "Client Alerts Portal":
                     st.dataframe(out_df, use_container_width=True, hide_index=True)
                 st.write("")
 
-        # 5 Main Tabs for the Client Portal
+        # Overview Dashboard and 5 Main Tabs
         cat_tabs = st.tabs([
+            "Overview Dashboard",
             "Cycle Time", 
             "Run Rate", 
             "Capacity Risk", 
             "Tooling End of Life", 
             "Operation Status"
         ])
+
+        with cat_tabs[0]: # Dashboard Overview
+            st.markdown("### 📊 Executive Overview Dashboard")
+            st.write("High-level summary of all active alerts matching your current filters.")
+
+            # --- 1. Core KPIs ---
+            kpi1, kpi2, kpi3, kpi4, kpi5 = st.columns(5)
+            kpi1.markdown(f"<div class='metric-card'><div class='metric-title'>Total Active Alerts</div><div class='metric-value'>{len(df)}</div></div>", unsafe_allow_html=True)
+            kpi2.markdown(f"<div class='metric-card'><div class='metric-title'>Impacted Tools</div><div class='metric-value'>{df['Tool'].nunique()}</div></div>", unsafe_allow_html=True)
+            kpi3.markdown(f"<div class='metric-card'><div class='metric-title'>Impacted Plants</div><div class='metric-value'>{df['Plant'].nunique()}</div></div>", unsafe_allow_html=True)
+            kpi4.markdown(f"<div class='metric-card'><div class='metric-title'>Impacted Suppliers</div><div class='metric-value'>{df['Supplier'].nunique()}</div></div>", unsafe_allow_html=True)
+            kpi5.markdown(f"<div class='metric-card'><div class='metric-title'>OEM Divisions</div><div class='metric-value'>{df['OEM Division'].nunique()}</div></div>", unsafe_allow_html=True)
+
+            # --- 2. Visualizations ---
+            st.markdown("#### 📈 Alert Distributions")
+            v1, v2, v3, v4 = st.columns(4)
+
+            with v1:
+                st.markdown("**By Severity**")
+                if not df.empty and MATPLOTLIB_AVAILABLE:
+                    fig, ax = plt.subplots(figsize=(3,3))
+                    sev_counts = df['Severity'].value_counts()
+                    # Custom colors to maintain consistency
+                    sev_colors = ['#ef4444' if '2' in str(x) else '#f59e0b' if '1' in str(x) else '#3b82f6' for x in sev_counts.index]
+                    ax.pie(sev_counts, labels=sev_counts.index, autopct='%1.0f%%', startangle=90,
+                           colors=sev_colors, wedgeprops=dict(width=0.4, edgecolor='white'))
+                    plt.tight_layout()
+                    st.pyplot(fig)
+                else:
+                    st.bar_chart(df['Severity'].value_counts())
+
+            with v2:
+                st.markdown("**By Alert Type**")
+                st.bar_chart(df['Alert Type'].value_counts())
+
+            with v3:
+                st.markdown("**By Frequency**")
+                st.bar_chart(df['Frequency'].value_counts())
+
+            with v4:
+                st.markdown("**By OEM Division**")
+                st.bar_chart(df['OEM Division'].value_counts())
+
+            st.divider()
+
+            # --- 3. Trend Analysis ---
+            st.markdown("#### 📉 Alert Generation Trends")
+            if not df.empty:
+                trend_df = df.copy()
+                trend_df['Date'] = pd.to_datetime(trend_df['Date/Time']).dt.date
+                trend_data = trend_df.groupby(['Date', 'Severity']).size().unstack(fill_value=0)
+                st.line_chart(trend_data)
+            else:
+                st.info("No data available for trend analysis.")
+
+            st.divider()
+
+            # --- 4. Top Impacted Entities ---
+            st.markdown("#### 🎯 Top Impacted Entities")
+            t1, t2, t3 = st.columns(3)
+            with t1:
+                st.markdown("**Top Tools**")
+                st.dataframe(df['Tool'].value_counts().head(5).reset_index().rename(columns={'count':'Alerts', 'Tool':'Tooling ID'}), use_container_width=True, hide_index=True)
+            with t2:
+                st.markdown("**Top Plants**")
+                st.dataframe(df['Plant'].value_counts().head(5).reset_index().rename(columns={'count':'Alerts', 'Plant':'Plant Name'}), use_container_width=True, hide_index=True)
+            with t3:
+                st.markdown("**Top Suppliers**")
+                st.dataframe(df['Supplier'].value_counts().head(5).reset_index().rename(columns={'count':'Alerts', 'Supplier':'Supplier Name'}), use_container_width=True, hide_index=True)
+
+            st.divider()
+
+            # --- 5. Recent Alerts Feed ---
+            st.markdown("#### 🕒 Recent Alerts Feed")
+            if not df.empty:
+                recent_df = df.sort_values(by='Date/Time', ascending=False).head(10).copy()
+                recent_df['Trigger Metric'] = recent_df.apply(format_trigger_value, axis=1)
+                recent_display = recent_df[['Alert Name', 'Tool', 'Severity', 'Date/Time', 'Alert Type', 'Trigger Metric']].rename(columns={'Tool':'Tooling ID'})
+                st.dataframe(recent_display, use_container_width=True, hide_index=True)
+                st.caption("Use the 'Drill-down into Alert Details' section at the bottom of the page to investigate specific alerts.")
         
-        with cat_tabs[0]: # Cycle Time
+        with cat_tabs[1]: # Cycle Time
             render_alert_hierarchy(df[df['Alert Type'] == 'Cycle Time'], "Cycle Time")
             
-        with cat_tabs[1]: # Run Rate
+        with cat_tabs[2]: # Run Rate
             st.markdown("### Run Rate Shot Efficiency")
             render_alert_hierarchy(df[df['Alert Type'] == 'Low Run Rate - Shot Efficiency'], "Run Rate Shot Efficiency")
             st.divider()
             st.markdown("### Run Rate Time Stability")
             render_alert_hierarchy(df[df['Alert Type'] == 'Low Run Rate - Time Stability'], "Run Rate Time Stability")
             
-        with cat_tabs[2]: # Capacity Risk
+        with cat_tabs[3]: # Capacity Risk
             st.markdown("### Loss Parts vs Optimal Capacity")
             render_alert_hierarchy(df[df['Alert Type'] == 'Capacity Risk (Optimal)'], "Optimal Capacity")
             st.divider()
             st.markdown("### Loss Parts vs Target Capacity")
             render_alert_hierarchy(df[df['Alert Type'] == 'Capacity Risk (Target)'], "Target Capacity")
             
-        with cat_tabs[3]: # Tooling EOL
+        with cat_tabs[4]: # Tooling EOL
             render_alert_hierarchy(df[df['Alert Type'].str.contains('EOL')], "EOL")
             
-        with cat_tabs[4]: # Operation Status
+        with cat_tabs[5]: # Operation Status
             render_alert_hierarchy(df[df['Alert Type'].str.contains('Operation Status')], "Operation Status")
         
         st.divider()
         st.markdown("#### 📄 Drill-down into Alert Details")
-        st.write("Select an Alert ID to view its dedicated detail page with exact triggering calculations.")
+        st.write("Select an Alert to view its dedicated detail page with exact triggering calculations.")
         
         select_col, btn_col, empty_col = st.columns([3, 1, 6])
         with select_col:
-            selected_id = st.selectbox("Select Alert ID", df['Alert ID'].tolist(), label_visibility="collapsed")
+            alert_mapping = dict(zip(df['Alert ID'], df['Alert Name']))
+            selected_id = st.selectbox("Select Alert", options=list(alert_mapping.keys()), format_func=lambda x: alert_mapping[x], label_visibility="collapsed")
         with btn_col:
             if st.button("View Details", type="primary", use_container_width=True):
                 set_view("detail", selected_id)
@@ -920,7 +998,7 @@ elif page == "Client Alerts Portal":
     # INDIVIDUAL ALERT DETAIL PAGE
     # ---------------------------------------------------------
     elif st.session_state.client_portal_view == "detail":
-        if st.button("🔙 Back to Alerts List"):
+        if st.button("🔙 Back to Alerts List / Dashboard"):
             set_view("list")
             st.rerun()
             
@@ -928,7 +1006,7 @@ elif page == "Client Alerts Portal":
         alert_data = st.session_state.client_alerts_db[st.session_state.client_alerts_db['Alert ID'] == st.session_state.selected_alert_id].iloc[0]
         
         st.write("")
-        st.markdown(f"<h2>{alert_data['Alert Name']} <span style='color: #64748B; font-size: 1.5rem;'>({alert_data['Alert ID']})</span></h2>", unsafe_allow_html=True)
+        st.markdown(f"<h2>{alert_data['Alert Name']}</h2>", unsafe_allow_html=True)
         
         # Severity Badge
         sev = alert_data['Severity']
