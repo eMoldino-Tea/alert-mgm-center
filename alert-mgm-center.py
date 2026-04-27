@@ -331,6 +331,10 @@ with st.sidebar:
         st.markdown("### Target Data Filters")
         user_filters = render_filters("admin_filters")
 
+    elif page == "Client Alerts Portal":
+        st.markdown("### Target Data Filters")
+        client_filters = render_filters("client_filters")
+
 # ==========================================
 #              MAIN CONTENT
 # ==========================================
@@ -757,37 +761,81 @@ elif page == "Client Alerts Portal":
         
         df = st.session_state.client_alerts_db.copy()
         
-        # Highly scalable top-level filtering for the client
-        with st.expander("🔍 Search & Filter Tools", expanded=True):
-            col1, col2, col3, col4 = st.columns(4)
-            with col1:
-                search_query = st.text_input("Search (Tool, Part, Name)")
-            with col2:
-                plant_filter = st.multiselect("Filter by Plant", options=df['Plant'].unique())
-            with col3:
-                severity_filter = st.multiselect("Filter by Severity", options=df['Severity'].unique())
-            with col4:
-                type_filter = st.multiselect("Filter by Alert Type", options=df['Alert Type'].unique())
-
-        # Apply Filters dynamically
+        # Apply filters from the sidebar
+        if client_filters.get("OEM"): 
+            df = df[df['OEM Division'].isin(client_filters["OEM"])]
+        if client_filters.get("Supplier"): 
+            df = df[df['Supplier'].isin(client_filters["Supplier"])]
+        if client_filters.get("Plant"): 
+            df = df[df['Plant'].isin(client_filters["Plant"])]
+        if client_filters.get("Tooling Type"): 
+            df = df[df['Tooling Type'].isin(client_filters["Tooling Type"])]
+        if client_filters.get("Part"): 
+            df = df[df['Part'].isin(client_filters["Part"])]
+        if client_filters.get("Tooling"): 
+            df = df[df['Tool'].isin(client_filters["Tooling"])]
+        
+        # Search bar 
+        search_query = st.text_input("🔍 Search (Tool, Part, Name)")
         if search_query:
             df = df[df.apply(lambda row: row.astype(str).str.contains(search_query, case=False).any(), axis=1)]
-        if plant_filter:
-            df = df[df['Plant'].isin(plant_filter)]
-        if severity_filter:
-            df = df[df['Severity'].isin(severity_filter)]
-        if type_filter:
-            df = df[df['Alert Type'].isin(type_filter)]
-            
-        # Display Dataframe (Hide logic metrics in main view to keep it clean)
-        display_df = df.drop(columns=["Metric_1", "Metric_2"])
+
+        st.write(f"**Total Active Alerts in Scope: {len(df)}**")
+        st.write("")
         
-        st.write(f"**Showing {len(display_df)} Alert(s)**")
-        st.dataframe(
-            display_df,
-            use_container_width=True,
-            hide_index=True
-        )
+        # Helper function to format the trigger values
+        def format_trigger_value(row):
+            val = str(row['Metric_1'])
+            if pd.notna(row['Metric_2']) and str(row['Metric_2']).strip():
+                val += f" | {row['Metric_2']}"
+            return val
+            
+        # Helper function to render the structured hierarchy tables
+        def render_alert_hierarchy(tab_df):
+            if tab_df.empty:
+                st.info("No alerts found for this category with the current filters.")
+                return
+            
+            tab_df['Exact calculation/value'] = tab_df.apply(format_trigger_value, axis=1)
+            
+            # Map mock data columns to the requested table columns
+            display_cols = {
+                "Tool": "Tooling ID",
+                "Part": "Part ID (Part Name)",
+                "OEM Division": "OEM Business Division",
+                "Supplier": "Supplier",
+                "Plant": "Plant",
+                "Tooling Type": "Tooling Type",
+                "Severity": "Severity",
+                "Exact calculation/value": "Exact calculation/value",
+                "Alert ID": "Alert ID" # Kept for drill-down reference
+            }
+            
+            for freq in sorted(tab_df['Frequency'].unique()):
+                st.markdown(f"#### 🕒 Frequency: {freq}")
+                freq_df = tab_df[tab_df['Frequency'] == freq]
+                
+                for sev in sorted(freq_df['Severity'].unique()):
+                    st.markdown(f"##### 📌 {sev}")
+                    sev_df = freq_df[freq_df['Severity'] == sev]
+                    
+                    out_df = sev_df[list(display_cols.keys())].rename(columns=display_cols)
+                    st.dataframe(out_df, use_container_width=True, hide_index=True)
+                    st.write("")
+
+        # Create separate tabs for each Alert Type
+        cat_tabs = st.tabs(["Cycle Time", "Run Rate", "Capacity Risk", "Tooling End of Life", "Operation Status"])
+        
+        with cat_tabs[0]:
+            render_alert_hierarchy(df[df['Alert Type'] == 'Cycle Time'])
+        with cat_tabs[1]:
+            render_alert_hierarchy(df[df['Alert Type'].str.contains('Run Rate')])
+        with cat_tabs[2]:
+            render_alert_hierarchy(df[df['Alert Type'].str.contains('Capacity Risk')])
+        with cat_tabs[3]:
+            render_alert_hierarchy(df[df['Alert Type'].str.contains('EOL')])
+        with cat_tabs[4]:
+            render_alert_hierarchy(df[df['Alert Type'].str.contains('Operation Status')])
         
         st.divider()
         st.markdown("#### 📄 Drill-down into Alert Details")
