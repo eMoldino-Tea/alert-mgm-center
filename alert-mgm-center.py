@@ -1,6 +1,8 @@
 import streamlit as st
 import pandas as pd
 import datetime
+import os
+import tempfile
 
 # --- PAGE CONFIGURATION ---
 st.set_page_config(
@@ -10,12 +12,18 @@ st.set_page_config(
     initial_sidebar_state="expanded"
 )
 
-# --- GRACEFUL PDF LIBRARY IMPORT ---
+# --- GRACEFUL LIBRARY IMPORTS ---
 try:
     from fpdf import FPDF
     FPDF_AVAILABLE = True
 except ImportError:
     FPDF_AVAILABLE = False
+
+try:
+    import matplotlib.pyplot as plt
+    MATPLOTLIB_AVAILABLE = True
+except ImportError:
+    MATPLOTLIB_AVAILABLE = False
 
 # --- SESSION STATE FOR ADMIN LOGGING ---
 if 'admin_log' not in st.session_state:
@@ -54,7 +62,7 @@ def display_level_box(level_idx, markdown_text):
     else:
         st.error(markdown_text)
 
-# --- ADVANCED PDF GENERATOR WITH DASHBOARD (REQUIRES FPDF) ---
+# --- EXECUTIVE POWER-BI STYLE PDF GENERATOR ---
 def generate_fpdf_report(df):
     
     def clean(text):
@@ -64,115 +72,120 @@ def generate_fpdf_report(df):
         
     class PDF(FPDF):
         def header(self):
-            # Report Header
+            # Report Header - Executive Style
+            self.set_fill_color(30, 58, 138) # Dark Blue
+            self.rect(0, 0, 297, 20, 'F')
+            self.set_y(6)
             self.set_font('Arial', 'B', 16)
-            self.set_text_color(30, 58, 138) # eMoldino Blue
-            self.cell(0, 10, clean('eMoldino - Alert Management Center'), 0, 1, 'C')
+            self.set_text_color(255, 255, 255)
+            self.cell(10)
+            self.cell(150, 8, clean('eMoldino Alert Management | Executive Dashboard'), 0, 0, 'L')
             self.set_font('Arial', '', 10)
-            self.set_text_color(100, 100, 100)
-            self.cell(0, 8, clean(f'Generated on: {datetime.datetime.now().strftime("%Y-%m-%d %H:%M:%S")}'), 0, 1, 'C')
-            self.ln(5)
+            self.cell(120, 8, clean(f'Generated: {datetime.datetime.now().strftime("%Y-%m-%d %H:%M")}'), 0, 1, 'R')
+            self.ln(10)
 
-        def chapter_title(self, title):
-            self.set_font('Arial', 'B', 14)
-            self.set_fill_color(230, 230, 230)
-            self.set_text_color(0, 0, 0)
-            self.cell(0, 10, f' {clean(title)}', 0, 1, 'L', 1)
-            self.ln(4)
-            
-        def dash_card(self, x, y, w, title, data_dict):
-            """Draws a clean summary card with mini bar charts"""
-            # Draw Card Header
+        def kpi_card(self, x, y, w, h, title, value, subtitle):
+            """Draws a clean KPI summary card"""
             self.set_xy(x, y)
+            self.set_fill_color(248, 250, 252) # Slate 50
+            self.set_draw_color(203, 213, 225) # Slate 300
+            self.rect(x, y, w, h, 'DF')
+            
+            self.set_xy(x, y + 4)
             self.set_font('Arial', 'B', 10)
-            self.set_fill_color(240, 244, 248) # Light blue header
-            self.set_text_color(30, 58, 138)
-            self.cell(w, 8, f" {clean(title)}", border=1, ln=2, fill=True)
+            self.set_text_color(100, 116, 139) # Slate 500
+            self.cell(w, 5, clean(title), 0, 1, 'C')
             
-            # Draw Card Content
-            self.set_fill_color(255, 255, 255)
-            self.set_text_color(50, 50, 50)
+            self.set_xy(x, y + 12)
+            self.set_font('Arial', 'B', 24)
+            self.set_text_color(30, 58, 138) # eMoldino Blue
+            self.cell(w, 10, clean(value), 0, 1, 'C')
+            
+            self.set_xy(x, y + 24)
             self.set_font('Arial', '', 9)
-            
-            start_y = self.get_y()
-            max_val = max(list(data_dict.values()) + [1]) # Dynamic scaling for bars
-            
-            for idx, (label, val) in enumerate(data_dict.items()):
-                cur_y = start_y + (idx * 8)
-                
-                # Label
-                self.set_xy(x + 2, cur_y + 1)
-                self.cell(w/2 - 2, 6, clean(label), border=0)
-                
-                # Count Value
-                self.set_xy(x + w/2, cur_y + 1)
-                self.set_font('Arial', 'B', 9)
-                self.cell(10, 6, str(val), border=0, align='R')
-                self.set_font('Arial', '', 9)
-                
-                # Visual Bar Chart
-                bar_max_w = (w / 2) - 15
-                bar_w = (val / max_val) * bar_max_w
-                self.set_fill_color(59, 130, 246) # Tailwind blue
-                self.rect(x + w/2 + 12, cur_y + 2.5, bar_w, 3, 'F')
-                
-            # Outline Border
-            total_h = 8 + (len(data_dict) * 8) + 2
-            self.rect(x, y, w, total_h)
-            
-            return y + total_h + 5 # Return Y coordinate for next element
+            self.set_text_color(148, 163, 184) # Slate 400
+            self.cell(w, 5, clean(subtitle), 0, 1, 'C')
 
-    pdf = PDF()
+    # Initialize PDF in Landscape mode
+    pdf = PDF('L', 'mm', 'A4')
     pdf.add_page()
     
-    # ==========================================
-    # PAGE 1: TRIGGERED ALERTS DASHBOARD
-    # ==========================================
-    pdf.chapter_title("TRIGGERED ALERTS DASHBOARD SUMMARY")
+    # Generate Matplotlib Charts
+    temp_files = []
     
-    y_start = pdf.get_y() + 4
-    card_width = 90
-    col1_x = 10
-    col2_x = 110
-    
-    # ROW 1: Cycle Time & Run Rate
-    y_next_l = pdf.dash_card(col1_x, y_start, card_width, "1. Cycle Time", {
-        "Level 1": 14, 
-        "Level 2": 5
-    })
-    y_next_r = pdf.dash_card(col2_x, y_start, card_width, "2. Run Rate", {
-        "Low Shot Efficiency": 22, 
-        "Low Time Stability": 8
-    })
-    
-    # ROW 2: Capacity Risk
-    y_row2 = max(y_next_l, y_next_r)
-    y_next_l = pdf.dash_card(col1_x, y_row2, card_width, "3.1 Capacity Risk (Optimal Capacity)", {
-        "Level 1": 3, 
-        "Level 2": 1
-    })
-    y_next_r = pdf.dash_card(col2_x, y_row2, card_width, "3.2 Capacity Risk (Target Capacity)", {
-        "Level 1": 6, 
-        "Level 2": 2
-    })
-    
-    # ROW 3: EOL & Operation Status
-    y_row3 = max(y_next_l, y_next_r)
-    pdf.dash_card(col1_x, y_row3, card_width, "4. Tooling End of Life", {
-        "Level 1": 12, 
-        "Level 2": 4
-    })
-    pdf.dash_card(col2_x, y_row3, card_width, "5. Operation Status", {
-        "Inactive": 19, 
-        "Sensor Offline": 7, 
-        "Sensor Detached": 2
-    })
-    
+    # Chart 1: Donut Chart (Alerts by Category)
+    fig1, ax1 = plt.subplots(figsize=(4.5, 4.5))
+    labels = ['Cycle Time', 'Run Rate', 'Cap Risk', 'EOL', 'Op Status']
+    sizes = [19, 30, 12, 16, 28]
+    colors = ['#1e3a8a', '#3b82f6', '#60a5fa', '#93c5fd', '#bfdbfe']
+    ax1.pie(sizes, labels=labels, autopct='%1.1f%%', startangle=90, colors=colors,
+            wedgeprops=dict(width=0.4, edgecolor='white', linewidth=2), textprops={'fontsize': 9})
+    plt.title('Alert Distribution by Category', fontweight='bold', color='#1e40af', pad=10)
+    plt.tight_layout()
+    tmp1 = tempfile.NamedTemporaryFile(delete=False, suffix='.png')
+    plt.savefig(tmp1.name, format='png', transparent=True, dpi=150)
+    plt.close(fig1)
+    temp_files.append(tmp1.name)
+
+    # Chart 2: Stacked Bar Chart (Alert Severity Breakdown)
+    fig2, ax2 = plt.subplots(figsize=(5, 4.5))
+    categories = ['Cycle', 'Run Rate', 'Cap Risk', 'EOL']
+    level1 = [14, 22, 9, 12]
+    level2 = [5, 8, 3, 4]
+    ax2.bar(categories, level1, label='Level 1', color='#60a5fa', width=0.6)
+    ax2.bar(categories, level2, bottom=level1, label='Level 2', color='#1e3a8a', width=0.6)
+    ax2.legend(loc='upper right', frameon=False)
+    ax2.spines['top'].set_visible(False)
+    ax2.spines['right'].set_visible(False)
+    ax2.spines['left'].set_color('#cbd5e1')
+    ax2.spines['bottom'].set_color('#cbd5e1')
+    plt.title('Severity Breakdown per Category', fontweight='bold', color='#1e40af', pad=10)
+    plt.tight_layout()
+    tmp2 = tempfile.NamedTemporaryFile(delete=False, suffix='.png')
+    plt.savefig(tmp2.name, format='png', transparent=True, dpi=150)
+    plt.close(fig2)
+    temp_files.append(tmp2.name)
+
+    # Chart 3: Pie Chart (Operation Status)
+    fig3, ax3 = plt.subplots(figsize=(4.5, 4.5))
+    status_labels = ['Inactive', 'Offline', 'Detached']
+    status_sizes = [19, 7, 2]
+    status_colors = ['#94a3b8', '#f87171', '#facc15']
+    ax3.pie(status_sizes, labels=status_labels, autopct='%1.1f%%', startangle=140, colors=status_colors,
+            wedgeprops=dict(edgecolor='white', linewidth=2), textprops={'fontsize': 9})
+    plt.title('Operation Status Breakdown', fontweight='bold', color='#1e40af', pad=10)
+    plt.tight_layout()
+    tmp3 = tempfile.NamedTemporaryFile(delete=False, suffix='.png')
+    plt.savefig(tmp3.name, format='png', transparent=True, dpi=150)
+    plt.close(fig3)
+    temp_files.append(tmp3.name)
+
+    # --- Draw Dashboard Layout ---
+    # Top KPI Cards
+    pdf.kpi_card(15, 30, 85, 35, "TOTAL ACTIVE ALERTS", "105", "+12% vs Last Month")
+    pdf.kpi_card(106, 30, 85, 35, "TOOLS IN LEVEL 1", "57", "Needs Monitoring")
+    pdf.kpi_card(197, 30, 85, 35, "TOOLS IN LEVEL 2", "20", "Requires Immediate Action")
+
+    # Chart Backgrounds
+    pdf.set_fill_color(255, 255, 255)
+    pdf.set_draw_color(226, 232, 240)
+    pdf.rect(15, 75, 85, 110, 'DF')
+    pdf.rect(106, 75, 85, 110, 'DF')
+    pdf.rect(197, 75, 85, 110, 'DF')
+
+    # Place Charts
+    pdf.image(tmp1.name, x=15, y=85, w=85)
+    pdf.image(tmp2.name, x=105, y=85, w=85)
+    pdf.image(tmp3.name, x=197, y=85, w=85)
+
     # ==========================================
     # PAGE 2: ACTIVE CONFIGURATIONS SUMMARY
     # ==========================================
     pdf.add_page()
-    pdf.chapter_title("ACTIVE CONFIGURATIONS SUMMARY")
+    pdf.set_font('Arial', 'B', 14)
+    pdf.set_text_color(30, 58, 138)
+    pdf.cell(0, 10, "ACTIVE ALERTS DIRECTORY", 0, 1, 'L')
+    pdf.ln(2)
     
     # Table Header
     pdf.set_font('Arial', 'B', 9)
@@ -180,7 +193,7 @@ def generate_fpdf_report(df):
     pdf.set_text_color(255, 255, 255)
     
     cols = ["Alert ID", "Alert Type", "Plant", "Tooling / Part", "Level 1 Cond", "Status"]
-    col_widths = [20, 30, 20, 40, 60, 20]
+    col_widths = [30, 40, 30, 60, 80, 30] # Fits Landscape (270mm total)
     
     for i in range(len(cols)):
         pdf.cell(col_widths[i], 8, clean(cols[i]), 1, 0, 'C', 1)
@@ -191,18 +204,27 @@ def generate_fpdf_report(df):
     pdf.set_text_color(0, 0, 0)
     
     for _, row in df.iterrows():
-        pdf.cell(col_widths[0], 8, clean(str(row["Alert ID"])[:15]), 1)
-        pdf.cell(col_widths[1], 8, clean(str(row["Alert Type"])[:20]), 1)
-        pdf.cell(col_widths[2], 8, clean(str(row["Plant"])[:12]), 1)
-        pdf.cell(col_widths[3], 8, clean(str(row["Tooling / Part"])[:25]), 1)
-        pdf.cell(col_widths[4], 8, clean(str(row["Level 1 Condition"])[:40]), 1)
+        pdf.cell(col_widths[0], 8, clean(str(row["Alert ID"])[:20]), 1)
+        pdf.cell(col_widths[1], 8, clean(str(row["Alert Type"])[:25]), 1)
+        pdf.cell(col_widths[2], 8, clean(str(row["Plant"])[:20]), 1)
+        pdf.cell(col_widths[3], 8, clean(str(row["Tooling / Part"])[:40]), 1)
+        pdf.cell(col_widths[4], 8, clean(str(row["Level 1 Condition"])[:50]), 1)
         pdf.cell(col_widths[5], 8, clean(str(row["Status"])), 1)
         pdf.ln()
         
     try:
-        return bytes(pdf.output())
+        output = bytes(pdf.output())
     except TypeError:
-        return pdf.output(dest='S').encode('latin-1')
+        output = pdf.output(dest='S').encode('latin-1')
+
+    # Clean up temp image files
+    for tmp_file in temp_files:
+        try:
+            os.remove(tmp_file)
+        except OSError:
+            pass
+
+    return output
 
 # --- REUSABLE FILTER FUNCTION ---
 def render_filters(key_prefix):
@@ -312,7 +334,7 @@ if page == "Configuration Management":
                     use_container_width=True
                 )
             else:
-                if FPDF_AVAILABLE:
+                if FPDF_AVAILABLE and MATPLOTLIB_AVAILABLE:
                     export_data = generate_fpdf_report(dummy_alerts_df)
                     st.download_button(
                         label="⬇️ Download PDF Report",
@@ -322,7 +344,7 @@ if page == "Configuration Management":
                         use_container_width=True
                     )
                 else:
-                    st.warning("⚠️ The `fpdf` library is required to generate the PDF Dashboard. Please run `pip install fpdf`.")
+                    st.warning("⚠️ FPDF or Matplotlib library missing. Run `pip install fpdf matplotlib`.")
             
             st.divider()
             st.write("✉️ Send to Email")
