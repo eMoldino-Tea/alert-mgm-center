@@ -783,38 +783,32 @@ elif page == "Client Alerts Portal":
         st.write(f"**Total Active Alerts in Scope: {len(df)}**")
         st.write("")
         
-        # Helper function to format the trigger values
-        def format_trigger_value(row):
-            val = str(row['Metric_1'])
-            if pd.notna(row['Metric_2']) and str(row['Metric_2']).strip():
-                val += f" | {row['Metric_2']}"
-            return val
-            
         # Helper function to render the structured hierarchy tables
         def render_alert_hierarchy(tab_df, tab_name):
             if tab_df.empty:
                 st.info("No alerts found for this category with the current filters.")
                 return
             
-            # Interactive Frequency Filter
-            available_freqs = sorted(tab_df['Frequency'].unique())
-            selected_freqs = st.multiselect(
-                f"Filter by Alert Frequency", 
-                options=available_freqs, 
-                default=available_freqs, 
+            # Interactive Frequency Filter (Dropdown)
+            available_freqs = sorted(tab_df['Frequency'].unique().tolist())
+            freq_options = ["All Frequencies"] + available_freqs
+            selected_freq = st.selectbox(
+                "Filter by Alert Frequency", 
+                options=freq_options, 
                 key=f"freq_filter_{tab_name}"
             )
             
-            filtered_df = tab_df[tab_df['Frequency'].isin(selected_freqs)].copy()
+            if selected_freq != "All Frequencies":
+                filtered_df = tab_df[tab_df['Frequency'] == selected_freq].copy()
+            else:
+                filtered_df = tab_df.copy()
             
             if filtered_df.empty:
                 st.info("No alerts match the selected frequency.")
                 return
                 
-            filtered_df['Exact calculation/value'] = filtered_df.apply(format_trigger_value, axis=1)
-            
-            # Map mock data columns to the requested table columns
-            display_cols = {
+            # Base table columns mapping
+            base_cols = {
                 "Tool": "Tooling ID",
                 "Part": "Part ID (Part Name)",
                 "OEM Division": "OEM Business Division",
@@ -822,17 +816,56 @@ elif page == "Client Alerts Portal":
                 "Plant": "Plant",
                 "Tooling Type": "Tooling Type",
                 "Severity": "Severity",
-                "Exact calculation/value": "Exact calculation/value",
-                "Alert ID": "Alert ID" # Kept for drill-down reference
             }
             
-            # Display Tables group exactly by Severity (as requested)
+            # Display Tables grouped exactly by Severity
             for sev in sorted(filtered_df['Severity'].unique()):
                 st.markdown(f"#### 📌 {sev}")
                 sev_df = filtered_df[filtered_df['Severity'] == sev]
                 
-                out_df = sev_df[list(display_cols.keys())].rename(columns=display_cols)
-                st.dataframe(out_df, use_container_width=True, hide_index=True)
+                # Further separate by specific Alert Type to render tailored Dynamic Columns
+                for a_type in sorted(sev_df['Alert Type'].unique()):
+                    type_df = sev_df[sev_df['Alert Type'] == a_type].copy()
+                    
+                    display_cols = base_cols.copy()
+                    
+                    # Dynamically assign requested specific column headers based on exact alert logic
+                    if a_type == "Cycle Time":
+                        display_cols["Metric_1"] = "% of deviation"
+                    elif a_type == "Low Run Rate - Shot Efficiency":
+                        display_cols["Metric_1"] = "Run Rate Shot Efficiency"
+                    elif a_type == "Low Run Rate - Time Stability":
+                        display_cols["Metric_1"] = "Run Rate Time Stability"
+                    elif "Capacity Risk" in a_type:
+                        display_cols["Metric_1"] = "% of loss"
+                    elif a_type == "Tooling EOL (Utilization)":
+                        display_cols["Metric_1"] = "Utilization Rate"
+                    elif a_type == "Tooling EOL (Remaining Days)":
+                        display_cols["Metric_1"] = "Remaining Life (Days)"
+                    elif a_type == "Tooling EOL (Combination)":
+                        display_cols["Metric_1"] = "Utilization Rate (%)"
+                        display_cols["Metric_2"] = "Remaining Life (days)"
+                    elif a_type == "Operation Status (Tool Producing)":
+                        display_cols["Metric_1"] = "Date & Time"
+                    elif a_type == "Operation Status (Tool Stops)":
+                        display_cols["Metric_1"] = "Tool Stops"
+                    else:
+                        # Connectivity & Status-Based Alerts (Sensor Offline, Detached, Inactive)
+                        status_val = a_type.replace("Operation Status (", "").replace(")", "")
+                        type_df["Tooling Status"] = status_val
+                        display_cols["Tooling Status"] = "Tooling Status"
+                        display_cols["Metric_1"] = "Date & Time"
+                    
+                    # Keep Alert ID for the drill-down reference
+                    display_cols["Alert ID"] = "Alert ID" 
+                    
+                    out_df = type_df[list(display_cols.keys())].rename(columns=display_cols)
+                    
+                    # If multiple logic types exist in the same severity section, show sub-header
+                    if len(sev_df['Alert Type'].unique()) > 1:
+                        st.markdown(f"##### {a_type}")
+                        
+                    st.dataframe(out_df, use_container_width=True, hide_index=True)
                 st.write("")
 
         # Create separate tabs for each Alert Type
