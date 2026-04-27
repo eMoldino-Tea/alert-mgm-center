@@ -25,11 +25,34 @@ try:
 except ImportError:
     MATPLOTLIB_AVAILABLE = False
 
-# --- SESSION STATE FOR ADMIN LOGGING ---
+# --- SESSION STATE INITIALIZATION ---
 if 'admin_log' not in st.session_state:
     st.session_state.admin_log = pd.DataFrame(columns=[
         "Timestamp", "Server", "Users", "Alert Type", "Target Scope (Filters)", "Configuration details"
     ])
+
+# Initialize mock client alerts for the new Client Portal
+if 'client_alerts_db' not in st.session_state:
+    # Building a scalable mock dataset covering all requested logic scenarios
+    mock_data = [
+        {"Alert ID": "ALT-1001", "Alert Name": "Cycle Time Deviation - Tool A", "Date/Time": "2026-04-27 10:15:00", "Frequency": "Hourly", "Tool": "Tool_A", "Part": "Part 101", "Supplier": "Supplier X", "Plant": "Plant 1", "Tooling Type": "Injection", "OEM Division": "Div A", "Severity": "Level 2", "Alert Type": "Cycle Time", "Metric_1": "12.5%", "Metric_2": ""},
+        {"Alert ID": "ALT-1002", "Alert Name": "Low Eff - Supplier Y", "Date/Time": "2026-04-26 08:00:00", "Frequency": "Daily", "Tool": "Tool_B", "Part": "Part 102", "Supplier": "Supplier Y", "Plant": "Plant 2", "Tooling Type": "Stamping", "OEM Division": "Div B", "Severity": "Level 1", "Alert Type": "Low Run Rate - Shot Efficiency", "Metric_1": "72%", "Metric_2": ""},
+        {"Alert ID": "ALT-1003", "Alert Name": "Low Stab - Plant 1", "Date/Time": "2026-04-25 14:30:00", "Frequency": "Weekly", "Tool": "Tool_C", "Part": "Part 103", "Supplier": "Supplier X", "Plant": "Plant 1", "Tooling Type": "Die Casting", "OEM Division": "Div A", "Severity": "Level 2", "Alert Type": "Low Run Rate - Time Stability", "Metric_1": "65%", "Metric_2": ""},
+        {"Alert ID": "ALT-1004", "Alert Name": "Cap Risk Optimal - Tool D", "Date/Time": "2026-04-27 09:00:00", "Frequency": "Daily", "Tool": "Tool_D", "Part": "Product Alpha", "Supplier": "Supplier Z", "Plant": "Plant 3", "Tooling Type": "Injection", "OEM Division": "Div C", "Severity": "Level 1", "Alert Type": "Capacity Risk (Optimal)", "Metric_1": "8.4%", "Metric_2": ""},
+        {"Alert ID": "ALT-1005", "Alert Name": "Cap Risk Target - Tool A", "Date/Time": "2026-04-24 11:20:00", "Frequency": "Monthly", "Tool": "Tool_A", "Part": "Part 101", "Supplier": "Supplier X", "Plant": "Plant 1", "Tooling Type": "Injection", "OEM Division": "Div A", "Severity": "Level 2", "Alert Type": "Capacity Risk (Target)", "Metric_1": "11.2%", "Metric_2": ""},
+        {"Alert ID": "ALT-1006", "Alert Name": "EOL Util - Tool B", "Date/Time": "2026-04-27 16:45:00", "Frequency": "Daily", "Tool": "Tool_B", "Part": "Part 102", "Supplier": "Supplier Y", "Plant": "Plant 2", "Tooling Type": "Stamping", "OEM Division": "Div B", "Severity": "Level 1", "Alert Type": "Tooling EOL (Utilization)", "Metric_1": "92%", "Metric_2": ""},
+        {"Alert ID": "ALT-1007", "Alert Name": "EOL Days - Tool C", "Date/Time": "2026-04-26 09:15:00", "Frequency": "Weekly", "Tool": "Tool_C", "Part": "Part 103", "Supplier": "Supplier X", "Plant": "Plant 1", "Tooling Type": "Die Casting", "OEM Division": "Div A", "Severity": "Level 2", "Alert Type": "Tooling EOL (Remaining Days)", "Metric_1": "14 days", "Metric_2": ""},
+        {"Alert ID": "ALT-1008", "Alert Name": "EOL Combo - Tool D", "Date/Time": "2026-04-27 10:00:00", "Frequency": "Daily", "Tool": "Tool_D", "Part": "Product Alpha", "Supplier": "Supplier Z", "Plant": "Plant 3", "Tooling Type": "Injection", "OEM Division": "Div C", "Severity": "Level 2", "Alert Type": "Tooling EOL (Combination)", "Metric_1": "96%", "Metric_2": "8 days"},
+        {"Alert ID": "ALT-1009", "Alert Name": "Tool Producing Started", "Date/Time": "2026-04-27 07:30:00", "Frequency": "Real time", "Tool": "Tool_A", "Part": "Part 101", "Supplier": "Supplier X", "Plant": "Plant 1", "Tooling Type": "Injection", "OEM Division": "Div A", "Severity": "Event", "Alert Type": "Operation Status (Tool Producing)", "Metric_1": "2026-04-27 07:30:00", "Metric_2": ""},
+        {"Alert ID": "ALT-1010", "Alert Name": "Tool Stopped Unexpectedly", "Date/Time": "2026-04-27 13:45:00", "Frequency": "Real time", "Tool": "Tool_B", "Part": "Part 102", "Supplier": "Supplier Y", "Plant": "Plant 2", "Tooling Type": "Stamping", "OEM Division": "Div B", "Severity": "Event", "Alert Type": "Operation Status (Tool Stops)", "Metric_1": "2026-04-27 13:45:00", "Metric_2": ""},
+        {"Alert ID": "ALT-1011", "Alert Name": "Sensor Offline Alert", "Date/Time": "2026-04-26 22:10:00", "Frequency": "Real time", "Tool": "Tool_C", "Part": "Part 103", "Supplier": "Supplier X", "Plant": "Plant 1", "Tooling Type": "Die Casting", "OEM Division": "Div A", "Severity": "Status", "Alert Type": "Operation Status (Sensor Offline)", "Metric_1": "2026-04-26 22:10:00", "Metric_2": ""},
+    ]
+    st.session_state.client_alerts_db = pd.DataFrame(mock_data)
+
+if 'client_portal_view' not in st.session_state:
+    st.session_state.client_portal_view = "list"
+if 'selected_alert_id' not in st.session_state:
+    st.session_state.selected_alert_id = None
 
 # --- CUSTOM STYLING ---
 st.markdown("""
@@ -49,6 +72,26 @@ st.markdown("""
         padding: 15px;
         border-radius: 8px;
         margin-top: 10px;
+    }
+    .metric-card {
+        background-color: #F8FAFC;
+        border: 1px solid #E2E8F0;
+        border-radius: 8px;
+        padding: 20px;
+        margin-bottom: 15px;
+    }
+    .metric-title {
+        color: #64748B;
+        font-size: 0.95rem;
+        font-weight: 600;
+        text-transform: uppercase;
+        letter-spacing: 0.05em;
+        margin-bottom: 5px;
+    }
+    .metric-value {
+        color: #0F172A;
+        font-size: 1.8rem;
+        font-weight: bold;
     }
     </style>
 """, unsafe_allow_html=True)
@@ -267,7 +310,7 @@ def log_admin_action(alert_type, filters, selected_server, selected_users, detai
 # ==========================================
 with st.sidebar:
     st.markdown("### Navigation")
-    page = st.radio("Go to:", ["Configuration Management", "Global Dashboard"])
+    page = st.radio("Go to:", ["Configuration Management", "Global Dashboard", "Client Alerts Portal"])
     st.divider()
 
     if page == "Configuration Management":
@@ -275,7 +318,7 @@ with st.sidebar:
         selected_server = st.selectbox("Target Server", ["JLR Server", "GM Server", "Paccar Server"])
         
         mock_users = {
-            "JLR Server": ["John Doe (john.doe@jlr.com)", "Jane Smith (jane.smith@jlr.com)", "Mark Davis (m.davis@jlr.com)"],
+            "JLR Server": ["Alex Carter (alex.carter@jlr.com)", "Jane Smith (jane.smith@jlr.com)", "Mark Davis (m.davis@jlr.com)"],
             "GM Server": ["Mike Johnson (mjohnson@gm.com)", "Sarah Connor (sconnor@gm.com)", "Tom Wilson (twilson@gm.com)"],
             "Paccar Server": ["David Lee (d.lee@paccar.com)", "Emma Wilson (e.wilson@paccar.com)", "Chris Taylor (ctaylor@paccar.com)"]
         }
@@ -694,3 +737,166 @@ elif page == "Global Dashboard":
                 "Target Scope (Filters)": st.column_config.TextColumn("Filters Applied")
             }
         )
+
+# ==========================================
+#        CLIENT ALERTS PORTAL
+# ==========================================
+elif page == "Client Alerts Portal":
+    
+    # Manage View State (List vs Detail)
+    def set_view(view_mode, alert_id=None):
+        st.session_state.client_portal_view = view_mode
+        st.session_state.selected_alert_id = alert_id
+
+    # ---------------------------------------------------------
+    # MAIN LISTING PAGE
+    # ---------------------------------------------------------
+    if st.session_state.client_portal_view == "list":
+        st.markdown('<div class="main-header">My Active Alerts</div>', unsafe_allow_html=True)
+        st.markdown('<div class="sub-header">Review, filter, and drill-down into triggered alerts relevant to your assigned scope.</div>', unsafe_allow_html=True)
+        
+        df = st.session_state.client_alerts_db.copy()
+        
+        # Highly scalable top-level filtering for the client
+        with st.expander("🔍 Search & Filter Tools", expanded=True):
+            col1, col2, col3, col4 = st.columns(4)
+            with col1:
+                search_query = st.text_input("Search (Tool, Part, Name)")
+            with col2:
+                plant_filter = st.multiselect("Filter by Plant", options=df['Plant'].unique())
+            with col3:
+                severity_filter = st.multiselect("Filter by Severity", options=df['Severity'].unique())
+            with col4:
+                type_filter = st.multiselect("Filter by Alert Type", options=df['Alert Type'].unique())
+
+        # Apply Filters dynamically
+        if search_query:
+            df = df[df.apply(lambda row: row.astype(str).str.contains(search_query, case=False).any(), axis=1)]
+        if plant_filter:
+            df = df[df['Plant'].isin(plant_filter)]
+        if severity_filter:
+            df = df[df['Severity'].isin(severity_filter)]
+        if type_filter:
+            df = df[df['Alert Type'].isin(type_filter)]
+            
+        # Display Dataframe (Hide logic metrics in main view to keep it clean)
+        display_df = df.drop(columns=["Metric_1", "Metric_2"])
+        
+        st.write(f"**Showing {len(display_df)} Alert(s)**")
+        st.dataframe(
+            display_df,
+            use_container_width=True,
+            hide_index=True
+        )
+        
+        st.divider()
+        st.markdown("#### 📄 Drill-down into Alert Details")
+        st.write("Select an Alert ID to view its dedicated detail page with exact triggering calculations.")
+        
+        select_col, btn_col, empty_col = st.columns([3, 1, 6])
+        with select_col:
+            selected_id = st.selectbox("Select Alert ID", df['Alert ID'].tolist(), label_visibility="collapsed")
+        with btn_col:
+            if st.button("View Details", type="primary", use_container_width=True):
+                set_view("detail", selected_id)
+                st.rerun()
+
+    # ---------------------------------------------------------
+    # INDIVIDUAL ALERT DETAIL PAGE
+    # ---------------------------------------------------------
+    elif st.session_state.client_portal_view == "detail":
+        if st.button("🔙 Back to Alerts List"):
+            set_view("list")
+            st.rerun()
+            
+        # Fetch the selected alert data
+        alert_data = st.session_state.client_alerts_db[st.session_state.client_alerts_db['Alert ID'] == st.session_state.selected_alert_id].iloc[0]
+        
+        st.write("")
+        st.markdown(f"<h2>{alert_data['Alert Name']} <span style='color: #64748B; font-size: 1.5rem;'>({alert_data['Alert ID']})</span></h2>", unsafe_allow_html=True)
+        
+        # Severity Badge
+        sev = alert_data['Severity']
+        color = "#EF4444" if "Level 2" in sev else "#F59E0B" if "Level 1" in sev else "#3B82F6"
+        st.markdown(f"<div style='background-color: {color}; color: white; padding: 4px 12px; border-radius: 20px; display: inline-block; font-weight: bold; font-size: 0.9rem; margin-bottom: 20px;'>Severity: {sev}</div>", unsafe_allow_html=True)
+        
+        # Top Metrics Cards (General Info)
+        c1, c2, c3, c4 = st.columns(4)
+        with c1:
+            st.markdown(f"<div class='metric-card'><div class='metric-title'>Date & Time</div><div style='font-size: 1.2rem; font-weight: bold;'>{alert_data['Date/Time']}</div></div>", unsafe_allow_html=True)
+        with c2:
+            st.markdown(f"<div class='metric-card'><div class='metric-title'>Frequency</div><div style='font-size: 1.2rem; font-weight: bold;'>{alert_data['Frequency']}</div></div>", unsafe_allow_html=True)
+        with c3:
+            st.markdown(f"<div class='metric-card'><div class='metric-title'>Tooling Type</div><div style='font-size: 1.2rem; font-weight: bold;'>{alert_data['Tooling Type']}</div></div>", unsafe_allow_html=True)
+        with c4:
+            st.markdown(f"<div class='metric-card'><div class='metric-title'>OEM Division</div><div style='font-size: 1.2rem; font-weight: bold;'>{alert_data['OEM Division']}</div></div>", unsafe_allow_html=True)
+
+        # Entity Details
+        st.markdown("#### 🏭 Entity Details")
+        e1, e2, e3, e4 = st.columns(4)
+        e1.metric("Target Tool", alert_data['Tool'])
+        e2.metric("Associated Part", alert_data['Part'])
+        e3.metric("Plant Location", alert_data['Plant'])
+        e4.metric("Supplier", alert_data['Supplier'])
+        
+        st.divider()
+
+        # DYNAMIC LOGIC DISPLAY ZONE
+        st.markdown(f"#### 📊 Trigger Analytics: {alert_data['Alert Type']}")
+        
+        a_type = alert_data['Alert Type']
+        m1 = alert_data['Metric_1']
+        m2 = alert_data['Metric_2']
+        
+        # 1. Cycle Time
+        if a_type == "Cycle Time":
+            st.info("The tool is operating significantly outside the approved cycle time parameters.")
+            st.markdown(f"<div class='metric-card'><div class='metric-title'>% Deviation vs Approved Cycle Time</div><div class='metric-value' style='color: #EF4444;'>{m1}</div></div>", unsafe_allow_html=True)
+            
+        # 2. Run Rate
+        elif a_type == "Low Run Rate - Shot Efficiency":
+            st.info("The tool is failing to achieve the expected output efficiency during scheduled operation hours.")
+            st.markdown(f"<div class='metric-card'><div class='metric-title'>Current Run Rate Shot Efficiency</div><div class='metric-value' style='color: #F59E0B;'>{m1}</div></div>", unsafe_allow_html=True)
+            
+        elif a_type == "Low Run Rate - Time Stability":
+            st.info("The tool's cycle times are highly unstable, affecting production predictability.")
+            st.markdown(f"<div class='metric-card'><div class='metric-title'>Current Run Rate Time Stability</div><div class='metric-value' style='color: #F59E0B;'>{m1}</div></div>", unsafe_allow_html=True)
+            
+        # 3. Capacity Risk
+        elif "Capacity Risk (Optimal)" in a_type:
+            st.info("Calculating lost parts specifically against the optimal maximum theoretical capacity.")
+            st.markdown(f"<div class='metric-card'><div class='metric-title'>% of Lost Parts Against Optimal Capacity</div><div class='metric-value' style='color: #EF4444;'>{m1}</div></div>", unsafe_allow_html=True)
+            
+        elif "Capacity Risk (Target)" in a_type:
+            st.info("Calculating lost parts against your predefined targeted capacity baseline.")
+            st.markdown(f"<div class='metric-card'><div class='metric-title'>% of Lost Parts Against Target Capacity</div><div class='metric-value' style='color: #EF4444;'>{m1}</div></div>", unsafe_allow_html=True)
+            
+        # 4. Tooling End of Life
+        elif "EOL (Utilization)" in a_type:
+            st.warning("Tool is approaching its maximum forecasted physical shot limit.")
+            st.markdown(f"<div class='metric-card'><div class='metric-title'>Current Tool Life Used</div><div class='metric-value' style='color: #EF4444;'>{m1}</div></div>", unsafe_allow_html=True)
+            
+        elif "EOL (Remaining Days)" in a_type:
+            st.warning("Tool life is severely depleted based on current running trajectory.")
+            st.markdown(f"<div class='metric-card'><div class='metric-title'>Estimated Remaining Tool Life</div><div class='metric-value' style='color: #EF4444;'>{m1}</div></div>", unsafe_allow_html=True)
+            
+        elif "EOL (Combination)" in a_type:
+            st.warning("Tool requires maintenance or replacement. A combination threshold has been breached.")
+            cc1, cc2 = st.columns(2)
+            with cc1:
+                st.markdown(f"<div class='metric-card'><div class='metric-title'>Current Tool Life Used</div><div class='metric-value' style='color: #EF4444;'>{m1}</div></div>", unsafe_allow_html=True)
+            with cc2:
+                st.markdown(f"<div class='metric-card'><div class='metric-title'>Estimated Remaining Tool Life</div><div class='metric-value' style='color: #EF4444;'>{m2}</div></div>", unsafe_allow_html=True)
+                
+        # 5. Operation Status
+        elif "Tool Producing" in a_type:
+            st.success("A new continuous production run interval was verified by the system.")
+            st.markdown(f"<div class='metric-card'><div class='metric-title'>Exact Start Timestamp</div><div class='metric-value' style='color: #10B981;'>{m1}</div></div>", unsafe_allow_html=True)
+            
+        elif "Tool Stops" in a_type:
+            st.error("The tool was abruptly removed from the press based on TMD diagnostics.")
+            st.markdown(f"<div class='metric-card'><div class='metric-title'>Exact Stop Timestamp</div><div class='metric-value' style='color: #EF4444;'>{m1}</div></div>", unsafe_allow_html=True)
+            
+        else: # Offline, Inactive, Detached
+            st.error("A critical connectivity or sensor status change was detected.")
+            st.markdown(f"<div class='metric-card'><div class='metric-title'>Status Change Timestamp</div><div class='metric-value' style='color: #EF4444;'>{m1}</div></div>", unsafe_allow_html=True)
