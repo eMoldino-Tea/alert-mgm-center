@@ -783,25 +783,29 @@ elif page == "Client Alerts Portal":
         st.write(f"**Total Active Alerts in Scope: {len(df)}**")
         st.write("")
         
+        # Helper function to format the trigger values
+        def format_trigger_value(row):
+            val = str(row['Metric_1'])
+            if pd.notna(row['Metric_2']) and str(row['Metric_2']).strip():
+                val += f" | {row['Metric_2']}"
+            return val
+            
         # Helper function to render the structured hierarchy tables
         def render_alert_hierarchy(tab_df, tab_name):
             if tab_df.empty:
                 st.info("No alerts found for this category with the current filters.")
                 return
             
-            # Interactive Frequency Filter (Dropdown)
+            # Interactive Frequency Filter (Multi-select Dropdown)
             available_freqs = sorted(tab_df['Frequency'].unique().tolist())
-            freq_options = ["All Frequencies"] + available_freqs
-            selected_freq = st.selectbox(
+            selected_freqs = st.multiselect(
                 "Filter by Alert Frequency", 
-                options=freq_options, 
+                options=available_freqs,
+                default=available_freqs,
                 key=f"freq_filter_{tab_name}"
             )
             
-            if selected_freq != "All Frequencies":
-                filtered_df = tab_df[tab_df['Frequency'] == selected_freq].copy()
-            else:
-                filtered_df = tab_df.copy()
+            filtered_df = tab_df[tab_df['Frequency'].isin(selected_freqs)].copy()
             
             if filtered_df.empty:
                 st.info("No alerts match the selected frequency.")
@@ -868,18 +872,30 @@ elif page == "Client Alerts Portal":
                     st.dataframe(out_df, use_container_width=True, hide_index=True)
                 st.write("")
 
-        # Create separate tabs for each Alert Type
-        cat_tabs = st.tabs(["Cycle Time", "Run Rate", "Capacity Risk", "Tooling End of Life", "Operation Status"])
+        # Create separate tabs for each detailed Alert Type
+        cat_tabs = st.tabs([
+            "Cycle Time", 
+            "Run Rate Shot Efficiency", 
+            "Run Rate Time Stability", 
+            "Loss Parts vs Optimal Capacity", 
+            "Loss Parts vs Target Capacity", 
+            "Tooling End of Life", 
+            "Operation Status"
+        ])
         
         with cat_tabs[0]:
             render_alert_hierarchy(df[df['Alert Type'] == 'Cycle Time'], "Cycle Time")
         with cat_tabs[1]:
-            render_alert_hierarchy(df[df['Alert Type'].str.contains('Run Rate')], "Run Rate")
+            render_alert_hierarchy(df[df['Alert Type'] == 'Low Run Rate - Shot Efficiency'], "Run Rate Shot Efficiency")
         with cat_tabs[2]:
-            render_alert_hierarchy(df[df['Alert Type'].str.contains('Capacity Risk')], "Capacity Risk")
+            render_alert_hierarchy(df[df['Alert Type'] == 'Low Run Rate - Time Stability'], "Run Rate Time Stability")
         with cat_tabs[3]:
-            render_alert_hierarchy(df[df['Alert Type'].str.contains('EOL')], "EOL")
+            render_alert_hierarchy(df[df['Alert Type'] == 'Capacity Risk (Optimal)'], "Optimal Capacity")
         with cat_tabs[4]:
+            render_alert_hierarchy(df[df['Alert Type'] == 'Capacity Risk (Target)'], "Target Capacity")
+        with cat_tabs[5]:
+            render_alert_hierarchy(df[df['Alert Type'].str.contains('EOL')], "EOL")
+        with cat_tabs[6]:
             render_alert_hierarchy(df[df['Alert Type'].str.contains('Operation Status')], "Operation Status")
         
         st.divider()
