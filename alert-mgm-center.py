@@ -56,37 +56,43 @@ def display_level_box(level_idx, markdown_text):
 
 # --- ADVANCED PDF GENERATOR WITH DASHBOARD (REQUIRES FPDF) ---
 def generate_fpdf_report(df):
+    
+    def clean(text):
+        """Helper to sanitize special unicode characters (like ≤) for FPDF latin-1 encoding"""
+        text = str(text).replace('≤', '<=').replace('≥', '>=')
+        return text.encode('latin-1', 'replace').decode('latin-1')
+        
     class PDF(FPDF):
         def header(self):
             # Report Header
             self.set_font('Arial', 'B', 16)
             self.set_text_color(30, 58, 138) # eMoldino Blue
-            self.cell(0, 10, 'eMoldino - Alert Management Center', 0, 1, 'C')
+            self.cell(0, 10, clean('eMoldino - Alert Management Center'), 0, 1, 'C')
             self.set_font('Arial', '', 10)
             self.set_text_color(100, 100, 100)
-            self.cell(0, 8, f'Generated on: {datetime.datetime.now().strftime("%Y-%m-%d %H:%M:%S")}', 0, 1, 'C')
+            self.cell(0, 8, clean(f'Generated on: {datetime.datetime.now().strftime("%Y-%m-%d %H:%M:%S")}'), 0, 1, 'C')
             self.ln(5)
 
         def chapter_title(self, title):
             self.set_font('Arial', 'B', 14)
             self.set_fill_color(230, 230, 230)
             self.set_text_color(0, 0, 0)
-            self.cell(0, 10, f' {title}', 0, 1, 'L', 1)
+            self.cell(0, 10, f' {clean(title)}', 0, 1, 'L', 1)
             self.ln(4)
             
         def section_title(self, title):
             self.set_font('Arial', 'B', 12)
             self.set_text_color(30, 58, 138)
-            self.cell(0, 8, title, 0, 1, 'L')
+            self.cell(0, 8, clean(title), 0, 1, 'L')
             
         def dashboard_row(self, label, value):
             self.set_x(20) # Indent
             self.set_font('Arial', '', 11)
             self.set_text_color(50, 50, 50)
-            self.cell(110, 6, label, 0, 0)
+            self.cell(110, 6, clean(label), 0, 0)
             self.set_font('Arial', 'B', 11)
             self.set_text_color(0, 0, 0)
-            self.cell(30, 6, str(value), 0, 1, 'R')
+            self.cell(30, 6, clean(value), 0, 1, 'R')
 
     pdf = PDF()
     pdf.add_page()
@@ -147,7 +153,7 @@ def generate_fpdf_report(df):
     col_widths = [20, 30, 20, 40, 60, 20]
     
     for i in range(len(cols)):
-        pdf.cell(col_widths[i], 8, cols[i], 1, 0, 'C', 1)
+        pdf.cell(col_widths[i], 8, clean(cols[i]), 1, 0, 'C', 1)
     pdf.ln()
     
     # Table Rows
@@ -155,12 +161,12 @@ def generate_fpdf_report(df):
     pdf.set_text_color(0, 0, 0)
     
     for _, row in df.iterrows():
-        pdf.cell(col_widths[0], 8, str(row["Alert ID"])[:15], 1)
-        pdf.cell(col_widths[1], 8, str(row["Alert Type"])[:20], 1)
-        pdf.cell(col_widths[2], 8, str(row["Plant"])[:12], 1)
-        pdf.cell(col_widths[3], 8, str(row["Tooling / Part"])[:25], 1)
-        pdf.cell(col_widths[4], 8, str(row["Level 1 Condition"])[:40], 1)
-        pdf.cell(col_widths[5], 8, str(row["Status"]), 1)
+        pdf.cell(col_widths[0], 8, clean(str(row["Alert ID"])[:15]), 1)
+        pdf.cell(col_widths[1], 8, clean(str(row["Alert Type"])[:20]), 1)
+        pdf.cell(col_widths[2], 8, clean(str(row["Plant"])[:12]), 1)
+        pdf.cell(col_widths[3], 8, clean(str(row["Tooling / Part"])[:25]), 1)
+        pdf.cell(col_widths[4], 8, clean(str(row["Level 1 Condition"])[:40]), 1)
+        pdf.cell(col_widths[5], 8, clean(str(row["Status"])), 1)
         pdf.ln()
         
     try:
