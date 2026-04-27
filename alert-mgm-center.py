@@ -872,30 +872,36 @@ elif page == "Client Alerts Portal":
                     st.dataframe(out_df, use_container_width=True, hide_index=True)
                 st.write("")
 
-        # Create separate tabs for each detailed Alert Type
+        # 5 Main Tabs for the Client Portal
         cat_tabs = st.tabs([
             "Cycle Time", 
-            "Run Rate Shot Efficiency", 
-            "Run Rate Time Stability", 
-            "Loss Parts vs Optimal Capacity", 
-            "Loss Parts vs Target Capacity", 
+            "Run Rate", 
+            "Capacity Risk", 
             "Tooling End of Life", 
             "Operation Status"
         ])
         
-        with cat_tabs[0]:
+        with cat_tabs[0]: # Cycle Time
             render_alert_hierarchy(df[df['Alert Type'] == 'Cycle Time'], "Cycle Time")
-        with cat_tabs[1]:
+            
+        with cat_tabs[1]: # Run Rate
+            st.markdown("### Run Rate Shot Efficiency")
             render_alert_hierarchy(df[df['Alert Type'] == 'Low Run Rate - Shot Efficiency'], "Run Rate Shot Efficiency")
-        with cat_tabs[2]:
+            st.divider()
+            st.markdown("### Run Rate Time Stability")
             render_alert_hierarchy(df[df['Alert Type'] == 'Low Run Rate - Time Stability'], "Run Rate Time Stability")
-        with cat_tabs[3]:
+            
+        with cat_tabs[2]: # Capacity Risk
+            st.markdown("### Loss Parts vs Optimal Capacity")
             render_alert_hierarchy(df[df['Alert Type'] == 'Capacity Risk (Optimal)'], "Optimal Capacity")
-        with cat_tabs[4]:
+            st.divider()
+            st.markdown("### Loss Parts vs Target Capacity")
             render_alert_hierarchy(df[df['Alert Type'] == 'Capacity Risk (Target)'], "Target Capacity")
-        with cat_tabs[5]:
+            
+        with cat_tabs[3]: # Tooling EOL
             render_alert_hierarchy(df[df['Alert Type'].str.contains('EOL')], "EOL")
-        with cat_tabs[6]:
+            
+        with cat_tabs[4]: # Operation Status
             render_alert_hierarchy(df[df['Alert Type'].str.contains('Operation Status')], "Operation Status")
         
         st.divider()
