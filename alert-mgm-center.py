@@ -88,7 +88,7 @@ if 'selected_alert_id' not in st.session_state:
 # --- CUSTOM STYLING ---
 st.markdown("""
     <style>
-    .main-header { font-size: 2.5rem; font-weight: bold; color: #1E3A8A; margin-bottom: 0px; }
+    .main-header { font-size: 2.5rem; font-weight: bold; color: #1E3A8A; margin-bottom: 2rem; }
     .sub-header { font-size: 1.2rem; color: #6B7280; margin-bottom: 2rem; }
     .level-box { padding: 15px; border-radius: 8px; margin-top: 10px; }
     .metric-card { background-color: #F8FAFC; border: 1px solid #E2E8F0; border-radius: 8px; padding: 20px; margin-bottom: 15px; }
@@ -220,26 +220,19 @@ def format_df_for_client_export(df_sub, a_type):
     
     type_df = df_sub.copy()
     if a_type == "Cycle Time":
-        display_cols["Metric_1"] = "% of deviation"
+        display_cols["Metric_1"] = "% of Deviation"
     elif a_type == "Low Run Rate - Shot Efficiency":
         display_cols["Metric_1"] = "Run Rate Shot Efficiency"
     elif a_type == "Low Run Rate - Time Stability":
         display_cols["Metric_1"] = "Run Rate Time Stability"
     elif "Capacity Risk" in a_type:
-        display_cols["Metric_1"] = "% of loss"
+        display_cols["Metric_1"] = "% of Loss"
     elif "EOL" in a_type:
         display_cols["Metric_1"] = "Utilization Rate"
         if a_type in ["Tooling EOL (Remaining Days)", "Tooling EOL (Combination)"]:
             display_cols["Metric_2"] = "Remaining Life (Days)"
-    elif a_type == "Operation Status (Tool Producing)":
-        display_cols["Metric_1"] = "Date & Time"
-    elif a_type == "Operation Status (Tool Stops)":
-        display_cols["Metric_1"] = "Tool Stops"
-    else:
-        status_val = a_type.replace("Operation Status (", "").replace(")", "")
-        type_df["Tooling Status"] = status_val
-        display_cols["Tooling Status"] = "Tooling Status"
-        display_cols["Metric_1"] = "Date & Time"
+    elif "Operation Status" in a_type:
+        pass # Drop the metric column entirely for Operation Status
 
     display_cols["Date/Time"] = "Date & Time"
     
@@ -262,15 +255,15 @@ def generate_client_csv_zip(df):
             
         # 2. Run Rate
         rr_eff = df[df['Alert Type'] == 'Low Run Rate - Shot Efficiency']
-        if not rr_eff.empty: zip_file.writestr("Low Run Rate/Low Run Rate - Shot Efficiency.csv", format_df_for_client_export(rr_eff, 'Low Run Rate - Shot Efficiency').to_csv(index=False))
+        if not rr_eff.empty: zip_file.writestr("Low Run Rate – Shot Efficiency/Low Run Rate – Shot Efficiency.csv", format_df_for_client_export(rr_eff, 'Low Run Rate - Shot Efficiency').to_csv(index=False))
         rr_stab = df[df['Alert Type'] == 'Low Run Rate - Time Stability']
-        if not rr_stab.empty: zip_file.writestr("Low Run Rate/Low Run Rate - Time Stability.csv", format_df_for_client_export(rr_stab, 'Low Run Rate - Time Stability').to_csv(index=False))
+        if not rr_stab.empty: zip_file.writestr("Low Run Rate – Time Stability/Low Run Rate – Time Stability.csv", format_df_for_client_export(rr_stab, 'Low Run Rate - Time Stability').to_csv(index=False))
             
         # 3. Capacity Risk
         cr_opt = df[df['Alert Type'] == 'Capacity Risk (Optimal)']
-        if not cr_opt.empty: zip_file.writestr("Capacity Risk/Loss Parts vs Optimal Capacity.csv", format_df_for_client_export(cr_opt, 'Capacity Risk (Optimal)').to_csv(index=False))
+        if not cr_opt.empty: zip_file.writestr("Loss Parts vs Optimal Capacity/Loss Parts vs Optimal Capacity.csv", format_df_for_client_export(cr_opt, 'Capacity Risk (Optimal)').to_csv(index=False))
         cr_tgt = df[df['Alert Type'] == 'Capacity Risk (Target)']
-        if not cr_tgt.empty: zip_file.writestr("Capacity Risk/Loss Parts vs Target Capacity.csv", format_df_for_client_export(cr_tgt, 'Capacity Risk (Target)').to_csv(index=False))
+        if not cr_tgt.empty: zip_file.writestr("Loss Parts vs Target Capacity/Loss Parts vs Target Capacity.csv", format_df_for_client_export(cr_tgt, 'Capacity Risk (Target)').to_csv(index=False))
         
         # 4. Tooling EOL
         eol_df = df[df['Alert Type'].str.contains('EOL')]
@@ -278,15 +271,15 @@ def generate_client_csv_zip(df):
 
         # 5. Operation Status
         os_producing = df[df['Alert Type'] == 'Operation Status (Tool Producing)']
-        if not os_producing.empty: zip_file.writestr("Operation Status/Tool Starts Producing.csv", format_df_for_client_export(os_producing, 'Operation Status (Tool Producing)').to_csv(index=False))
+        if not os_producing.empty: zip_file.writestr("Tool Starts Producing/Tool Starts Producing.csv", format_df_for_client_export(os_producing, 'Operation Status (Tool Producing)').to_csv(index=False))
         os_stops = df[df['Alert Type'] == 'Operation Status (Tool Stops)']
-        if not os_stops.empty: zip_file.writestr("Operation Status/Tool Stops.csv", format_df_for_client_export(os_stops, 'Operation Status (Tool Stops)').to_csv(index=False))
+        if not os_stops.empty: zip_file.writestr("Tool Stops/Tool Stops.csv", format_df_for_client_export(os_stops, 'Operation Status (Tool Stops)').to_csv(index=False))
         os_inactive = df[df['Alert Type'] == 'Operation Status (Inactive)']
-        if not os_inactive.empty: zip_file.writestr("Operation Status/Inactive Tool.csv", format_df_for_client_export(os_inactive, 'Operation Status (Inactive)').to_csv(index=False))
+        if not os_inactive.empty: zip_file.writestr("Inactive Tool/Inactive Tool.csv", format_df_for_client_export(os_inactive, 'Operation Status (Inactive)').to_csv(index=False))
         os_offline = df[df['Alert Type'] == 'Operation Status (Sensor Offline)']
-        if not os_offline.empty: zip_file.writestr("Operation Status/Sensor Offline Tool.csv", format_df_for_client_export(os_offline, 'Operation Status (Sensor Offline)').to_csv(index=False))
+        if not os_offline.empty: zip_file.writestr("Sensor Offline Tool/Sensor Offline Tool.csv", format_df_for_client_export(os_offline, 'Operation Status (Sensor Offline)').to_csv(index=False))
         os_detached = df[df['Alert Type'] == 'Operation Status (Sensor Detached)']
-        if not os_detached.empty: zip_file.writestr("Operation Status/Sensor Detached Tool.csv", format_df_for_client_export(os_detached, 'Operation Status (Sensor Detached)').to_csv(index=False))
+        if not os_detached.empty: zip_file.writestr("Sensor Detached Tool/Sensor Detached Tool.csv", format_df_for_client_export(os_detached, 'Operation Status (Sensor Detached)').to_csv(index=False))
 
     return zip_buffer.getvalue()
 
@@ -412,7 +405,6 @@ def generate_client_dashboard_pdf(df):
         except OSError: pass
 
     return output
-
 
 # --- REUSABLE FILTER FUNCTION ---
 def render_filters(key_prefix):
