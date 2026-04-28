@@ -99,6 +99,29 @@ st.markdown("""
     .risk-score-warning { background-color: #FEF3C7; color: #92400E; }
     .card-tool { font-size: 1.3rem; font-weight: bold; color: #1E293B; margin-bottom: 5px;}
     .card-context { font-size: 0.95rem; color: #475569; margin-bottom: 0px; }
+    
+    /* Overlay magic to make entire Act Now cards clickable without showing weird boxes */
+    div[data-testid="column"]:has(.act-now-card) {
+        position: relative !important;
+    }
+    div[data-testid="column"]:has(.act-now-card) div[data-testid="stButton"] {
+        position: absolute !important;
+        top: 0 !important;
+        left: 0 !important;
+        right: 0 !important;
+        bottom: 0 !important;
+        width: 100% !important;
+        height: 100% !important;
+        z-index: 999 !important;
+        opacity: 0 !important; 
+    }
+    div[data-testid="column"]:has(.act-now-card) div[data-testid="stButton"] button {
+        width: 100% !important;
+        height: 100% !important;
+        cursor: pointer !important;
+        background: transparent !important;
+        border: none !important;
+    }
     </style>
 """, unsafe_allow_html=True)
 
@@ -794,27 +817,9 @@ elif page == "Client Alerts Portal":
             for idx, (_, tool_data) in enumerate(top_tools.iterrows()):
                 tool_alerts = high_risk_df[high_risk_df['Tool'] == tool_data['Tool']]
                 with cols[idx]:
-                    st.markdown(f"""
-                    <style>
-                    [data-testid="column"]:nth-child({idx+1}) [data-testid="stButton"] {{
-                        position: absolute;
-                        top: 0;
-                        left: 0;
-                        width: 100%;
-                        height: 100%;
-                        z-index: 10;
-                        opacity: 0;
-                    }}
-                    [data-testid="column"]:nth-child({idx+1}) [data-testid="stButton"] button {{
-                        width: 100%;
-                        height: 100%;
-                        cursor: pointer;
-                    }}
-                    </style>
-                    """, unsafe_allow_html=True)
                     
                     st.markdown(f"""
-                    <div class="action-card action-card-warning" style="margin-bottom: 0px; height: 100%;">
+                    <div class="action-card action-card-warning act-now-card" style="height: 100%;">
                         <div class="risk-score-badge risk-score-warning">High Risk Alerts: {len(tool_alerts)}</div>
                         <div class="card-tool">{tool_data['Tool']}</div>
                         <div class="card-context">Plant: {tool_data['Plant']} <br/> Supplier: {tool_data['Supplier']}</div>
