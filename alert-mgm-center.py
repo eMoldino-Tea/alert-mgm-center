@@ -4,7 +4,11 @@ import datetime
 import os
 import tempfile
 import random
+import io
+import zipfile
 import altair as alt
+import matplotlib
+matplotlib.use('Agg') # Enforce headless plotting for PDF generation
 
 # --- PAGE CONFIGURATION ---
 st.set_page_config(
@@ -154,7 +158,7 @@ def calculate_risk_index(row):
     
     return min(int(score), 99) 
 
-# --- EXECUTIVE POWER-BI STYLE PDF GENERATOR ---
+# --- EXECUTIVE PDF GENERATOR (ADMIN) ---
 def generate_fpdf_report(df):
     def clean(text):
         text = str(text).replace('≤', '<=').replace('≥', '>=')
@@ -208,7 +212,86 @@ def generate_fpdf_report(df):
     except TypeError:
         return pdf.output(dest='S').encode('latin-1')
 
-def generate_client_pdf_report(df):
+# --- CLIENT EXPORT ENGINE (ZIP & PDF) ---
+def format_df_for_client_export(df_sub, a_type):
+    """Maps the columns exactly to the UI tables, dropping Alert ID."""
+    base_cols = {"Tool": "Tooling ID", "Part": "Part ID (Part Name)", "OEM Division": "OEM Business Division", "Supplier": "Supplier", "Plant": "Plant", "Tooling Type": "Tooling Type", "Severity": "Severity"}
+    display_cols = base_cols.copy()
+    
+    type_df = df_sub.copy()
+    if a_type == "Cycle Time":
+        display_cols["Metric_1"] = "% of deviation"
+    elif a_type == "Low Run Rate - Shot Efficiency":
+        display_cols["Metric_1"] = "Run Rate Shot Efficiency"
+    elif a_type == "Low Run Rate - Time Stability":
+        display_cols["Metric_1"] = "Run Rate Time Stability"
+    elif "Capacity Risk" in a_type:
+        display_cols["Metric_1"] = "% of loss"
+    elif "EOL" in a_type:
+        display_cols["Metric_1"] = "Utilization Rate"
+        if a_type in ["Tooling EOL (Remaining Days)", "Tooling EOL (Combination)"]:
+            display_cols["Metric_2"] = "Remaining Life (Days)"
+    elif a_type == "Operation Status (Tool Producing)":
+        display_cols["Metric_1"] = "Date & Time"
+    elif a_type == "Operation Status (Tool Stops)":
+        display_cols["Metric_1"] = "Tool Stops"
+    else:
+        status_val = a_type.replace("Operation Status (", "").replace(")", "")
+        type_df["Tooling Status"] = status_val
+        display_cols["Tooling Status"] = "Tooling Status"
+        display_cols["Metric_1"] = "Date & Time"
+
+    display_cols["Date/Time"] = "Date & Time"
+    
+    final_cols = {k: v for k, v in display_cols.items() if k in type_df.columns}
+    out_df = type_df[list(final_cols.keys())].rename(columns=final_cols)
+    
+    if 'Alert ID' in out_df.columns:
+        out_df = out_df.drop(columns=['Alert ID'])
+        
+    return out_df
+
+def generate_client_csv_zip(df):
+    """Generates a strictly structured ZIP archive categorized by Alert Type directories."""
+    zip_buffer = io.BytesIO()
+    with zipfile.ZipFile(zip_buffer, "w", zipfile.ZIP_DEFLATED) as zip_file:
+        
+        # 1. Cycle Time
+        ct_df = df[df['Alert Type'] == 'Cycle Time']
+        if not ct_df.empty: zip_file.writestr("Cycle Time/Cycle Time.csv", format_df_for_client_export(ct_df, 'Cycle Time').to_csv(index=False))
+            
+        # 2. Run Rate
+        rr_eff = df[df['Alert Type'] == 'Low Run Rate - Shot Efficiency']
+        if not rr_eff.empty: zip_file.writestr("Low Run Rate/Low Run Rate - Shot Efficiency.csv", format_df_for_client_export(rr_eff, 'Low Run Rate - Shot Efficiency').to_csv(index=False))
+        rr_stab = df[df['Alert Type'] == 'Low Run Rate - Time Stability']
+        if not rr_stab.empty: zip_file.writestr("Low Run Rate/Low Run Rate - Time Stability.csv", format_df_for_client_export(rr_stab, 'Low Run Rate - Time Stability').to_csv(index=False))
+            
+        # 3. Capacity Risk
+        cr_opt = df[df['Alert Type'] == 'Capacity Risk (Optimal)']
+        if not cr_opt.empty: zip_file.writestr("Capacity Risk/Loss Parts vs Optimal Capacity.csv", format_df_for_client_export(cr_opt, 'Capacity Risk (Optimal)').to_csv(index=False))
+        cr_tgt = df[df['Alert Type'] == 'Capacity Risk (Target)']
+        if not cr_tgt.empty: zip_file.writestr("Capacity Risk/Loss Parts vs Target Capacity.csv", format_df_for_client_export(cr_tgt, 'Capacity Risk (Target)').to_csv(index=False))
+        
+        # 4. Tooling EOL
+        eol_df = df[df['Alert Type'].str.contains('EOL')]
+        if not eol_df.empty: zip_file.writestr("Tooling End of Life/Tooling End of Life.csv", format_df_for_client_export(eol_df, 'Tooling EOL (Combination)').to_csv(index=False))
+
+        # 5. Operation Status
+        os_producing = df[df['Alert Type'] == 'Operation Status (Tool Producing)']
+        if not os_producing.empty: zip_file.writestr("Operation Status/Tool Starts Producing.csv", format_df_for_client_export(os_producing, 'Operation Status (Tool Producing)').to_csv(index=False))
+        os_stops = df[df['Alert Type'] == 'Operation Status (Tool Stops)']
+        if not os_stops.empty: zip_file.writestr("Operation Status/Tool Stops.csv", format_df_for_client_export(os_stops, 'Operation Status (Tool Stops)').to_csv(index=False))
+        os_inactive = df[df['Alert Type'] == 'Operation Status (Inactive)']
+        if not os_inactive.empty: zip_file.writestr("Operation Status/Inactive Tool.csv", format_df_for_client_export(os_inactive, 'Operation Status (Inactive)').to_csv(index=False))
+        os_offline = df[df['Alert Type'] == 'Operation Status (Sensor Offline)']
+        if not os_offline.empty: zip_file.writestr("Operation Status/Sensor Offline Tool.csv", format_df_for_client_export(os_offline, 'Operation Status (Sensor Offline)').to_csv(index=False))
+        os_detached = df[df['Alert Type'] == 'Operation Status (Sensor Detached)']
+        if not os_detached.empty: zip_file.writestr("Operation Status/Sensor Detached Tool.csv", format_df_for_client_export(os_detached, 'Operation Status (Sensor Detached)').to_csv(index=False))
+
+    return zip_buffer.getvalue()
+
+def generate_client_dashboard_pdf(df):
+    """Reconstructs the Overview Dashboard completely offline using FPDF and Matplotlib"""
     def clean(text):
         text = str(text).replace('≤', '<=').replace('≥', '>=')
         return text.encode('latin-1', 'replace').decode('latin-1')
@@ -221,45 +304,115 @@ def generate_client_pdf_report(df):
             self.set_font('Arial', 'B', 16)
             self.set_text_color(255, 255, 255)
             self.cell(10)
-            self.cell(150, 8, clean('eMoldino Alert Management | Client Summary'), 0, 0, 'L')
+            self.cell(150, 8, clean('eMoldino Alert Center | Executive Dashboard'), 0, 0, 'L')
             self.set_font('Arial', '', 10)
             self.cell(120, 8, clean(f'Generated: {datetime.datetime.now().strftime("%Y-%m-%d %H:%M")}'), 0, 1, 'R')
             self.ln(10)
             
+        def kpi_card(self, x, y, w, h, title, value):
+            self.set_xy(x, y)
+            self.set_fill_color(248, 250, 252)
+            self.set_draw_color(203, 213, 225)
+            self.rect(x, y, w, h, 'DF')
+            self.set_xy(x, y + 4)
+            self.set_font('Arial', 'B', 9)
+            self.set_text_color(100, 116, 139)
+            self.cell(w, 5, clean(title), 0, 1, 'C')
+            self.set_xy(x, y + 12)
+            self.set_font('Arial', 'B', 22)
+            self.set_text_color(30, 58, 138)
+            self.cell(w, 10, clean(value), 0, 1, 'C')
+
     pdf = PDF('L', 'mm', 'A4')
     pdf.add_page()
-    pdf.set_font('Arial', 'B', 14)
-    pdf.set_text_color(30, 58, 138)
-    pdf.cell(0, 10, "ACTIVE ALERTS DIRECTORY", 0, 1, 'L')
-    pdf.ln(2)
     
-    pdf.set_font('Arial', 'B', 9)
-    pdf.set_fill_color(30, 58, 138)
-    pdf.set_text_color(255, 255, 255)
-    
-    cols = ["Alert ID", "Alert Name", "Tool", "Alert Type", "Severity", "Date/Time"]
-    col_widths = [25, 60, 30, 60, 25, 45] 
-    
-    for i in range(len(cols)):
-        pdf.cell(col_widths[i], 8, clean(cols[i]), 1, 0, 'C', 1)
-    pdf.ln()
-    
-    pdf.set_font('Arial', '', 8)
-    pdf.set_text_color(0, 0, 0)
-    
-    for _, row in df.iterrows():
-        pdf.cell(col_widths[0], 8, clean(str(row["Alert ID"])[:20]), 1)
-        pdf.cell(col_widths[1], 8, clean(str(row["Alert Name"])[:35]), 1)
-        pdf.cell(col_widths[2], 8, clean(str(row["Tool"])[:20]), 1)
-        pdf.cell(col_widths[3], 8, clean(str(row["Alert Type"])[:35]), 1)
-        pdf.cell(col_widths[4], 8, clean(str(row["Severity"])[:20]), 1)
-        pdf.cell(col_widths[5], 8, clean(str(row["Date/Time"])[:25]), 1)
-        pdf.ln()
-        
+    # 1. KPI Cards
+    pdf.kpi_card(15, 30, 60, 25, "TOTAL ACTIVE ALERTS", str(len(df)))
+    pdf.kpi_card(82, 30, 60, 25, "IMPACTED TOOLS", str(df['Tool'].nunique()))
+    pdf.kpi_card(149, 30, 60, 25, "IMPACTED PLANTS", str(df['Plant'].nunique()))
+    pdf.kpi_card(216, 30, 60, 25, "IMPACTED SUPPLIERS", str(df['Supplier'].nunique()))
+
+    # 2. Generate Matplotlib Charts Headlessly
+    temp_files = []
+    sev_colors = {'Level 1': '#FACC15', 'Level 2': '#F59E0B', 'Level 3': '#EF4444'}
+    status_colors = {'Sensor Offline': '#F87171', 'Sensor Detached': '#FACC15', 'Inactive': '#94A3B8'}
+
+    def save_matplot_bar(df_subset, title):
+        fig, ax = plt.subplots(figsize=(4, 3))
+        categories = ['Level 1', 'Level 2', 'Level 3']
+        counts = df_subset['Severity'].value_counts() if not df_subset.empty else pd.Series(dtype=int)
+        plot_data = [counts.get(cat, 0) for cat in categories]
+        colors = [sev_colors.get(cat, '#3B82F6') for cat in categories]
+        bars = ax.bar(categories, plot_data, color=colors, width=0.5)
+        for bar in bars:
+            yval = bar.get_height()
+            ax.text(bar.get_x() + bar.get_width()/2, yval + 0.1, int(yval), ha='center', va='bottom', fontsize=8, fontweight='bold')
+        ax.set_title(title, fontsize=10, fontweight='bold', color='#1E40AF', pad=10)
+        ax.spines['top'].set_visible(False)
+        ax.spines['right'].set_visible(False)
+        ax.spines['left'].set_color('#CBD5E1')
+        ax.spines['bottom'].set_color('#CBD5E1')
+        plt.tight_layout()
+        tmp = tempfile.NamedTemporaryFile(delete=False, suffix='.png')
+        plt.savefig(tmp.name, format='png', transparent=True, dpi=150)
+        plt.close(fig)
+        temp_files.append(tmp.name)
+        return tmp.name
+
+    def save_matplot_donut(df_subset, title, categories, color_map, is_status=False):
+        fig, ax = plt.subplots(figsize=(4, 3))
+        if is_status: counts = df_subset['Alert Type'].apply(lambda x: x.replace("Operation Status (", "").replace(")", "")).value_counts()
+        else: counts = df_subset['Severity'].value_counts()
+        data = pd.Series({cat: counts.get(cat, 0) for cat in categories})
+        data = data[data > 0]
+        if data.empty:
+            ax.text(0.5, 0.5, 'No Alerts', ha='center', va='center')
+            ax.axis('off')
+        else:
+            colors = [color_map.get(x, '#3B82F6') for x in data.index]
+            ax.pie(data.values, labels=data.index, autopct='%1.0f%%', startangle=90, colors=colors, wedgeprops=dict(width=0.4, edgecolor='white', linewidth=1), textprops={'fontsize': 8})
+        ax.set_title(title, fontsize=10, fontweight='bold', color='#1E40AF', pad=10)
+        plt.tight_layout()
+        tmp = tempfile.NamedTemporaryFile(delete=False, suffix='.png')
+        plt.savefig(tmp.name, format='png', transparent=True, dpi=150)
+        plt.close(fig)
+        temp_files.append(tmp.name)
+        return tmp.name
+
+    # Generate and Place Row 1
+    t1 = save_matplot_bar(df[df['Alert Type'] == 'Cycle Time'], "Cycle Time Deviations")
+    t2 = save_matplot_bar(df[df['Alert Type'] == 'Low Run Rate - Time Stability'], "Run Rate Time Stability")
+    t3 = save_matplot_bar(df[df['Alert Type'] == 'Capacity Risk (Target)'], "Loss vs. Target Capacity")
+    pdf.image(t1, x=15, y=65, w=80)
+    pdf.image(t2, x=105, y=65, w=80)
+    pdf.image(t3, x=195, y=65, w=80)
+
+    # Generate and Place Row 2
+    os_cats = ['Sensor Offline', 'Sensor Detached', 'Inactive']
+    os_df = df[df['Alert Type'].apply(lambda x: any(cat in x for cat in os_cats))]
+    t4 = save_matplot_donut(os_df, "Operation Status", os_cats, status_colors, True)
+    t5 = save_matplot_bar(df[df['Alert Type'] == 'Low Run Rate - Shot Efficiency'], "Run Rate Shot Efficiency")
+    t6 = save_matplot_bar(df[df['Alert Type'] == 'Capacity Risk (Optimal)'], "Loss vs. Optimal Capacity")
+    pdf.image(t4, x=15, y=125, w=80)
+    pdf.image(t5, x=105, y=125, w=80)
+    pdf.image(t6, x=195, y=125, w=80)
+
+    # Page 2 for EOL
+    pdf.add_page()
+    t7 = save_matplot_donut(df[df['Alert Type'].str.contains('EOL')], "Tooling End of Life", ['Level 1', 'Level 2', 'Level 3'], sev_colors)
+    pdf.image(t7, x=15, y=30, w=80)
+
     try:
-        return bytes(pdf.output())
+        output = bytes(pdf.output())
     except TypeError:
-        return pdf.output(dest='S').encode('latin-1')
+        output = pdf.output(dest='S').encode('latin-1')
+
+    for tmp_file in temp_files:
+        try: os.remove(tmp_file)
+        except OSError: pass
+
+    return output
+
 
 # --- REUSABLE FILTER FUNCTION ---
 def render_filters(key_prefix):
@@ -620,8 +773,7 @@ elif page == "Client Alerts Portal":
     if st.session_state.client_portal_view == "list":
         header_col, export_col = st.columns([5, 1])
         with header_col:
-            st.markdown('<div class="main-header">Alerts Command Center</div>', unsafe_allow_html=True)
-            st.markdown('<div class="sub-header">Triage critical issues, identify supply chain bottlenecks, and track proactive watchlists.</div>', unsafe_allow_html=True)
+            st.markdown('<div class="main-header">Alert Center</div>', unsafe_allow_html=True)
         
         df = st.session_state.client_alerts_db.copy()
         
@@ -648,34 +800,34 @@ elif page == "Client Alerts Portal":
                 export_format = st.radio("Format", ["CSV", "PDF"], horizontal=True, key="client_export_format", label_visibility="collapsed")
                 
                 if export_format == "CSV":
-                    export_data = df.to_csv(index=False).encode('utf-8')
+                    zip_file_bytes = generate_client_csv_zip(df)
                     st.download_button(
-                        label="⬇️ Download CSV",
-                        data=export_data,
-                        file_name=f"client_alerts_{datetime.datetime.now().strftime('%Y%m%d')}.csv",
-                        mime="text/csv",
+                        label="⬇️ Download CSV Zip",
+                        data=zip_file_bytes,
+                        file_name=f"alert_center_export_{datetime.datetime.now().strftime('%Y%m%d')}.zip",
+                        mime="application/zip",
                         use_container_width=True,
                         key="client_csv_dl"
                     )
                 else:
-                    if FPDF_AVAILABLE:
-                        export_data = generate_client_pdf_report(df)
+                    if FPDF_AVAILABLE and MATPLOTLIB_AVAILABLE:
+                        pdf_data = generate_client_dashboard_pdf(df)
                         st.download_button(
-                            label="⬇️ Download PDF Report",
-                            data=export_data,
-                            file_name=f"client_alerts_{datetime.datetime.now().strftime('%Y%m%d')}.pdf",
+                            label="⬇️ Download PDF Dashboard",
+                            data=pdf_data,
+                            file_name=f"alert_center_dashboard_{datetime.datetime.now().strftime('%Y%m%d')}.pdf",
                             mime="application/pdf",
                             use_container_width=True,
                             key="client_pdf_dl"
                         )
                     else:
-                        st.warning("⚠️ FPDF library missing. Run `pip install fpdf`.")
+                        st.warning("⚠️ FPDF or Matplotlib missing. Run `pip install fpdf matplotlib`.")
                 
                 st.divider()
                 st.write("✉️ Send to Email")
                 email_input = st.text_input("Email Address", value="user@client.com", key="client_email_in", label_visibility="collapsed")
                 if st.button("Send Now", type="primary", use_container_width=True, key="client_email_btn"):
-                    st.success(f"Sent to {email_input}!")
+                    st.success(f"Sent successfully to {email_input}!")
 
         st.write("")
         
