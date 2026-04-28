@@ -36,12 +36,12 @@ if 'admin_log' not in st.session_state:
 if 'client_alerts_db' not in st.session_state:
     mock_data = []
     distributions = [
-        ("Cycle Time", [("Normal", 45, "0%"), ("Warning", 14, "4%"), ("Critical", 5, "12%")]),
-        ("Low Run Rate - Shot Efficiency", [("Normal", 50, "90%"), ("Warning", 22, "80%"), ("Critical", 8, "65%")]),
-        ("Low Run Rate - Time Stability", [("Normal", 60, "88%"), ("Warning", 15, "78%"), ("Critical", 4, "60%")]),
-        ("Capacity Risk (Optimal)", [("Normal", 80, "0%"), ("Warning", 12, "4%"), ("Critical", 3, "10%")]),
-        ("Capacity Risk (Target)", [("Normal", 75, "0%"), ("Warning", 18, "3%"), ("Critical", 7, "8%")]),
-        ("Tooling EOL (Utilization)", [("Normal", 40, "50%"), ("Warning", 10, "85%"), ("Critical", 5, "95%")]),
+        ("Cycle Time", [("Level 1", 45, "4%"), ("Level 2", 14, "10%"), ("Level 3", 5, "18%")]),
+        ("Low Run Rate - Shot Efficiency", [("Level 1", 50, "80%"), ("Level 2", 22, "70%"), ("Level 3", 8, "55%")]),
+        ("Low Run Rate - Time Stability", [("Level 1", 60, "82%"), ("Level 2", 15, "65%"), ("Level 3", 4, "50%")]),
+        ("Capacity Risk (Optimal)", [("Level 1", 80, "4%"), ("Level 2", 12, "10%"), ("Level 3", 3, "18%")]),
+        ("Capacity Risk (Target)", [("Level 1", 75, "3%"), ("Level 2", 18, "8%"), ("Level 3", 7, "15%")]),
+        ("Tooling EOL (Utilization)", [("Level 1", 40, "75%"), ("Level 2", 10, "85%"), ("Level 3", 5, "95%")]),
         ("Operation Status (Sensor Offline)", [("Status", 7, "2026-04-28 08:00:00")]),
         ("Operation Status (Sensor Detached)", [("Status", 2, "2026-04-28 09:00:00")]),
         ("Operation Status (Inactive)", [("Status", 19, "2026-04-28 10:00:00")])
@@ -199,8 +199,8 @@ def generate_fpdf_report(df):
     categories = ['Cycle', 'Run Rate', 'Cap Risk', 'EOL']
     level1 = [14, 22, 9, 12]
     level2 = [5, 8, 3, 4]
-    ax2.bar(categories, level1, label='Warning', color='#60a5fa', width=0.6)
-    ax2.bar(categories, level2, bottom=level1, label='Critical', color='#1e3a8a', width=0.6)
+    ax2.bar(categories, level1, label='Level 1', color='#facc15', width=0.6)
+    ax2.bar(categories, level2, bottom=level1, label='Level 2', color='#f59e0b', width=0.6)
     ax2.legend(loc='upper right', frameon=False)
     ax2.spines['top'].set_visible(False)
     ax2.spines['right'].set_visible(False)
@@ -893,14 +893,14 @@ elif page == "Client Alerts Portal":
                 st.write("")
 
         # Helper functions for the custom graph-based dashboards
-        sev_colors = {'Normal': '#10b981', 'Warning': '#f59e0b', 'Critical': '#ef4444', 'Event': '#8b5cf6', 'Status': '#64748b'}
+        sev_colors = {'Level 1': '#facc15', 'Level 2': '#f59e0b', 'Level 3': '#ef4444', 'Event': '#8b5cf6', 'Status': '#64748b'}
         status_colors = {'Sensor Offline': '#f87171', 'Sensor Detached': '#facc15', 'Inactive': '#94a3b8'}
 
         def render_matplot_bar(df_subset, title):
             fig, ax = plt.subplots(figsize=(5, 3.5))
             
-            # Ensure consistent 3-level categories representation in every graph
-            categories = ['Normal', 'Warning', 'Critical']
+            # Ensure consistent 3-level categories representation in every graph based on N-level triggers
+            categories = ['Level 1', 'Level 2', 'Level 3']
             counts = df_subset['Severity'].value_counts() if not df_subset.empty else pd.Series(dtype=int)
             plot_data = [counts.get(cat, 0) for cat in categories]
             colors = [sev_colors.get(cat, '#3b82f6') for cat in categories]
@@ -970,21 +970,21 @@ elif page == "Client Alerts Portal":
                 if MATPLOTLIB_AVAILABLE: 
                     render_matplot_bar(ct_df, "Cycle Time Deviations")
                 with st.expander("Definitions & Thresholds"):
-                    st.markdown("- **Normal:** ≤ 0% deviation\n- **Warning:** > 0% and ≤ 5% deviation\n- **Critical:** > 5% and ≤ 15% deviation")
+                    st.markdown("- **Level 1:** > 0% and ≤ 5% deviation\n- **Level 2:** > 5% and ≤ 15% deviation\n- **Level 3:** > 15% deviation")
                 
                 st.markdown("##### Run Rate Stability")
                 rr_stab_df = df[df['Alert Type'] == 'Low Run Rate - Time Stability']
                 if MATPLOTLIB_AVAILABLE: 
                     render_matplot_bar(rr_stab_df, "Low Time Stability")
                 with st.expander("Definitions & Thresholds"):
-                    st.markdown("- **Normal:** ≥ 85%\n- **Warning:** 75% ≤ rate < 85%\n- **Critical:** 60% ≤ rate < 75%")
+                    st.markdown("- **Level 1:** 75% ≤ rate < 85%\n- **Level 2:** 60% ≤ rate < 75%\n- **Level 3:** < 60%")
 
                 st.markdown("##### Loss vs. Target Capacity")
                 cr_tgt_df = df[df['Alert Type'] == 'Capacity Risk (Target)']
                 if MATPLOTLIB_AVAILABLE: 
                     render_matplot_bar(cr_tgt_df, "Loss vs Target Capacity")
                 with st.expander("Definitions & Thresholds"):
-                    st.markdown("- **Normal:** 0% loss\n- **Warning:** > 0% and ≤ 5% loss\n- **Critical:** > 5% and ≤ 10% loss")
+                    st.markdown("- **Level 1:** > 0% and ≤ 5% loss\n- **Level 2:** > 5% and ≤ 10% loss\n- **Level 3:** > 10% loss")
 
                 st.markdown("##### Operation Status")
                 os_target_cats = ['Sensor Offline', 'Sensor Detached', 'Inactive']
@@ -1005,27 +1005,27 @@ elif page == "Client Alerts Portal":
                 if MATPLOTLIB_AVAILABLE: 
                     render_matplot_bar(rr_eff_df, "Low Shot Efficiency")
                 with st.expander("Definitions & Thresholds"):
-                    st.markdown("- **Normal:** ≥ 85%\n- **Warning:** 75% ≤ rate < 85%\n- **Critical:** 60% ≤ rate < 75%")
+                    st.markdown("- **Level 1:** 75% ≤ rate < 85%\n- **Level 2:** 60% ≤ rate < 75%\n- **Level 3:** < 60%")
 
                 st.markdown("##### Loss vs. Optimal Capacity")
                 cr_opt_df = df[df['Alert Type'] == 'Capacity Risk (Optimal)']
                 if MATPLOTLIB_AVAILABLE: 
                     render_matplot_bar(cr_opt_df, "Loss vs Optimal Capacity")
                 with st.expander("Definitions & Thresholds"):
-                    st.markdown("- **Normal:** 0% loss\n- **Warning:** > 0% and ≤ 5% loss\n- **Critical:** > 5% and ≤ 15% loss")
+                    st.markdown("- **Level 1:** > 0% and ≤ 5% loss\n- **Level 2:** > 5% and ≤ 10% loss\n- **Level 3:** > 10% loss")
 
                 st.markdown("##### Tooling End of Life")
                 eol_df = df[df['Alert Type'].str.contains('EOL')]
                 
-                # Force Donut to display only 3 defined levels
-                categories = ['Normal', 'Warning', 'Critical']
+                # Force Donut to display exactly the levels mapped out
+                categories = ['Level 1', 'Level 2', 'Level 3']
                 eol_counts = eol_df['Severity'].value_counts()
                 eol_counts_aligned = pd.Series({cat: eol_counts.get(cat, 0) for cat in categories})
                 eol_counts_aligned = eol_counts_aligned[eol_counts_aligned > 0] # Remove empty segments
                 if MATPLOTLIB_AVAILABLE: 
                     render_matplot_donut(eol_counts_aligned, "EOL Severity Distribution", sev_colors)
                 with st.expander("Definitions & Thresholds"):
-                    st.markdown("- **Normal:** Utilization < 80% AND Remaining > 30 days\n- **Warning:** Utilization 80%-90% OR Remaining ≤ 30 days\n- **Critical:** Utilization > 90% OR Remaining ≤ 10 days")
+                    st.markdown("- **Level 1:** Utilization 70%-80% OR Remaining ≤ 45 days\n- **Level 2:** Utilization 80%-90% OR Remaining ≤ 30 days\n- **Level 3:** Utilization > 90% OR Remaining ≤ 10 days")
 
             st.divider()
 
@@ -1105,7 +1105,7 @@ elif page == "Client Alerts Portal":
         
         # Severity Badge
         sev = alert_data['Severity']
-        color = "#EF4444" if "Critical" in sev else "#F59E0B" if "Warning" in sev else "#10B981" if "Normal" in sev else "#3B82F6"
+        color = "#EF4444" if "Level 3" in sev else "#F59E0B" if "Level 2" in sev else "#FACC15" if "Level 1" in sev else "#3B82F6"
         st.markdown(f"<div style='background-color: {color}; color: white; padding: 4px 12px; border-radius: 20px; display: inline-block; font-weight: bold; font-size: 0.9rem; margin-bottom: 20px;'>Severity: {sev}</div>", unsafe_allow_html=True)
         
         # Top Metrics Cards (General Info)
