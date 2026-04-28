@@ -35,19 +35,26 @@ if 'admin_log' not in st.session_state:
 if 'client_alerts_db' not in st.session_state:
     # Building a scalable mock dataset covering all requested logic scenarios
     mock_data = [
-        {"Alert ID": "ALT-1001", "Alert Name": "Cycle Time Deviation - Tool A", "Date/Time": "2026-04-27 10:15:00", "Frequency": "Hourly", "Tool": "Tool_A", "Part": "Part 101", "Supplier": "Supplier X", "Plant": "Plant 1", "Tooling Type": "Injection", "OEM Division": "Div A", "Severity": "Level 2", "Alert Type": "Cycle Time", "Metric_1": "12.5%", "Metric_2": ""},
-        {"Alert ID": "ALT-1002", "Alert Name": "Low Eff - Supplier Y", "Date/Time": "2026-04-26 08:00:00", "Frequency": "Daily", "Tool": "Tool_B", "Part": "Part 102", "Supplier": "Supplier Y", "Plant": "Plant 2", "Tooling Type": "Stamping", "OEM Division": "Div B", "Severity": "Level 1", "Alert Type": "Low Run Rate - Shot Efficiency", "Metric_1": "72%", "Metric_2": ""},
-        {"Alert ID": "ALT-1003", "Alert Name": "Low Stab - Plant 1", "Date/Time": "2026-04-25 14:30:00", "Frequency": "Weekly", "Tool": "Tool_C", "Part": "Part 103", "Supplier": "Supplier X", "Plant": "Plant 1", "Tooling Type": "Die Casting", "OEM Division": "Div A", "Severity": "Level 2", "Alert Type": "Low Run Rate - Time Stability", "Metric_1": "65%", "Metric_2": ""},
-        {"Alert ID": "ALT-1004", "Alert Name": "Cap Risk Optimal - Tool D", "Date/Time": "2026-04-27 09:00:00", "Frequency": "Daily", "Tool": "Tool_D", "Part": "Product Alpha", "Supplier": "Supplier Z", "Plant": "Plant 3", "Tooling Type": "Injection", "OEM Division": "Div C", "Severity": "Level 1", "Alert Type": "Capacity Risk (Optimal)", "Metric_1": "8.4%", "Metric_2": ""},
-        {"Alert ID": "ALT-1005", "Alert Name": "Cap Risk Target - Tool A", "Date/Time": "2026-04-24 11:20:00", "Frequency": "Monthly", "Tool": "Tool_A", "Part": "Part 101", "Supplier": "Supplier X", "Plant": "Plant 1", "Tooling Type": "Injection", "OEM Division": "Div A", "Severity": "Level 2", "Alert Type": "Capacity Risk (Target)", "Metric_1": "11.2%", "Metric_2": ""},
-        {"Alert ID": "ALT-1006", "Alert Name": "EOL Util - Tool B", "Date/Time": "2026-04-27 16:45:00", "Frequency": "Daily", "Tool": "Tool_B", "Part": "Part 102", "Supplier": "Supplier Y", "Plant": "Plant 2", "Tooling Type": "Stamping", "OEM Division": "Div B", "Severity": "Level 1", "Alert Type": "Tooling EOL (Utilization)", "Metric_1": "92%", "Metric_2": ""},
-        {"Alert ID": "ALT-1007", "Alert Name": "EOL Days - Tool C", "Date/Time": "2026-04-26 09:15:00", "Frequency": "Weekly", "Tool": "Tool_C", "Part": "Part 103", "Supplier": "Supplier X", "Plant": "Plant 1", "Tooling Type": "Die Casting", "OEM Division": "Div A", "Severity": "Level 2", "Alert Type": "Tooling EOL (Remaining Days)", "Metric_1": "14 days", "Metric_2": ""},
-        {"Alert ID": "ALT-1008", "Alert Name": "EOL Combo - Tool D", "Date/Time": "2026-04-27 10:00:00", "Frequency": "Daily", "Tool": "Tool_D", "Part": "Product Alpha", "Supplier": "Supplier Z", "Plant": "Plant 3", "Tooling Type": "Injection", "OEM Division": "Div C", "Severity": "Level 2", "Alert Type": "Tooling EOL (Combination)", "Metric_1": "96%", "Metric_2": "8 days"},
+        {"Alert ID": "ALT-1001", "Alert Name": "Cycle Time Deviation - Tool A", "Date/Time": "2026-04-27 10:15:00", "Frequency": "Hourly", "Tool": "Tool_A", "Part": "Part 101", "Supplier": "Supplier X", "Plant": "Plant 1", "Tooling Type": "Injection", "OEM Division": "Div A", "Severity": "Critical", "Alert Type": "Cycle Time", "Metric_1": "12.5%", "Metric_2": ""},
+        {"Alert ID": "ALT-1002", "Alert Name": "Low Eff - Supplier Y", "Date/Time": "2026-04-26 08:00:00", "Frequency": "Daily", "Tool": "Tool_B", "Part": "Part 102", "Supplier": "Supplier Y", "Plant": "Plant 2", "Tooling Type": "Stamping", "OEM Division": "Div B", "Severity": "Warning", "Alert Type": "Low Run Rate - Shot Efficiency", "Metric_1": "72%", "Metric_2": ""},
+        {"Alert ID": "ALT-1003", "Alert Name": "Low Stab - Plant 1", "Date/Time": "2026-04-25 14:30:00", "Frequency": "Weekly", "Tool": "Tool_C", "Part": "Part 103", "Supplier": "Supplier X", "Plant": "Plant 1", "Tooling Type": "Die Casting", "OEM Division": "Div A", "Severity": "Critical", "Alert Type": "Low Run Rate - Time Stability", "Metric_1": "65%", "Metric_2": ""},
+        {"Alert ID": "ALT-1004", "Alert Name": "Cap Risk Optimal - Tool D", "Date/Time": "2026-04-27 09:00:00", "Frequency": "Daily", "Tool": "Tool_D", "Part": "Product Alpha", "Supplier": "Supplier Z", "Plant": "Plant 3", "Tooling Type": "Injection", "OEM Division": "Div C", "Severity": "Warning", "Alert Type": "Capacity Risk (Optimal)", "Metric_1": "8.4%", "Metric_2": ""},
+        {"Alert ID": "ALT-1005", "Alert Name": "Cap Risk Target - Tool A", "Date/Time": "2026-04-24 11:20:00", "Frequency": "Monthly", "Tool": "Tool_A", "Part": "Part 101", "Supplier": "Supplier X", "Plant": "Plant 1", "Tooling Type": "Injection", "OEM Division": "Div A", "Severity": "Critical", "Alert Type": "Capacity Risk (Target)", "Metric_1": "11.2%", "Metric_2": ""},
+        {"Alert ID": "ALT-1006", "Alert Name": "EOL Util - Tool B", "Date/Time": "2026-04-27 16:45:00", "Frequency": "Daily", "Tool": "Tool_B", "Part": "Part 102", "Supplier": "Supplier Y", "Plant": "Plant 2", "Tooling Type": "Stamping", "OEM Division": "Div B", "Severity": "Warning", "Alert Type": "Tooling EOL (Utilization)", "Metric_1": "92%", "Metric_2": ""},
+        {"Alert ID": "ALT-1007", "Alert Name": "EOL Days - Tool C", "Date/Time": "2026-04-26 09:15:00", "Frequency": "Weekly", "Tool": "Tool_C", "Part": "Part 103", "Supplier": "Supplier X", "Plant": "Plant 1", "Tooling Type": "Die Casting", "OEM Division": "Div A", "Severity": "Critical", "Alert Type": "Tooling EOL (Remaining Days)", "Metric_1": "14 days", "Metric_2": ""},
+        {"Alert ID": "ALT-1008", "Alert Name": "EOL Combo - Tool D", "Date/Time": "2026-04-27 10:00:00", "Frequency": "Daily", "Tool": "Tool_D", "Part": "Product Alpha", "Supplier": "Supplier Z", "Plant": "Plant 3", "Tooling Type": "Injection", "OEM Division": "Div C", "Severity": "Critical", "Alert Type": "Tooling EOL (Combination)", "Metric_1": "96%", "Metric_2": "8 days"},
         {"Alert ID": "ALT-1009", "Alert Name": "Tool Producing Started", "Date/Time": "2026-04-27 07:30:00", "Frequency": "Real time", "Tool": "Tool_A", "Part": "Part 101", "Supplier": "Supplier X", "Plant": "Plant 1", "Tooling Type": "Injection", "OEM Division": "Div A", "Severity": "Event", "Alert Type": "Operation Status (Tool Producing)", "Metric_1": "2026-04-27 07:30:00", "Metric_2": ""},
         {"Alert ID": "ALT-1010", "Alert Name": "Tool Stopped Unexpectedly", "Date/Time": "2026-04-27 13:45:00", "Frequency": "Real time", "Tool": "Tool_B", "Part": "Part 102", "Supplier": "Supplier Y", "Plant": "Plant 2", "Tooling Type": "Stamping", "OEM Division": "Div B", "Severity": "Event", "Alert Type": "Operation Status (Tool Stops)", "Metric_1": "2026-04-27 13:45:00", "Metric_2": ""},
         {"Alert ID": "ALT-1011", "Alert Name": "Sensor Offline Alert", "Date/Time": "2026-04-26 22:10:00", "Frequency": "Real time", "Tool": "Tool_C", "Part": "Part 103", "Supplier": "Supplier X", "Plant": "Plant 1", "Tooling Type": "Die Casting", "OEM Division": "Div A", "Severity": "Status", "Alert Type": "Operation Status (Sensor Offline)", "Metric_1": "2026-04-26 22:10:00", "Metric_2": ""},
         {"Alert ID": "ALT-1012", "Alert Name": "Sensor Detached Alert", "Date/Time": "2026-04-26 10:10:00", "Frequency": "Real time", "Tool": "Tool_C", "Part": "Part 103", "Supplier": "Supplier X", "Plant": "Plant 1", "Tooling Type": "Die Casting", "OEM Division": "Div A", "Severity": "Status", "Alert Type": "Operation Status (Sensor Detached)", "Metric_1": "2026-04-26 10:10:00", "Metric_2": ""},
         {"Alert ID": "ALT-1013", "Alert Name": "Tool Inactive Alert", "Date/Time": "2026-04-25 08:10:00", "Frequency": "Real time", "Tool": "Tool_D", "Part": "Product Alpha", "Supplier": "Supplier Z", "Plant": "Plant 3", "Tooling Type": "Injection", "OEM Division": "Div C", "Severity": "Status", "Alert Type": "Operation Status (Inactive)", "Metric_1": "2026-04-25 08:10:00", "Metric_2": ""},
+        # Normal Samples to fulfill uniform chart representations
+        {"Alert ID": "ALT-1014", "Alert Name": "Cycle Time Normal - Tool E", "Date/Time": "2026-04-28 10:00:00", "Frequency": "Hourly", "Tool": "Tool_E", "Part": "Part 104", "Supplier": "Supplier Z", "Plant": "Plant 3", "Tooling Type": "Injection", "OEM Division": "Div C", "Severity": "Normal", "Alert Type": "Cycle Time", "Metric_1": "0%", "Metric_2": ""},
+        {"Alert ID": "ALT-1015", "Alert Name": "Healthy Eff - Tool F", "Date/Time": "2026-04-28 10:00:00", "Frequency": "Daily", "Tool": "Tool_F", "Part": "Part 105", "Supplier": "Supplier X", "Plant": "Plant 1", "Tooling Type": "Stamping", "OEM Division": "Div A", "Severity": "Normal", "Alert Type": "Low Run Rate - Shot Efficiency", "Metric_1": "95%", "Metric_2": ""},
+        {"Alert ID": "ALT-1016", "Alert Name": "Stable Stab - Tool G", "Date/Time": "2026-04-28 10:00:00", "Frequency": "Weekly", "Tool": "Tool_G", "Part": "Part 106", "Supplier": "Supplier Y", "Plant": "Plant 2", "Tooling Type": "Die Casting", "OEM Division": "Div B", "Severity": "Normal", "Alert Type": "Low Run Rate - Time Stability", "Metric_1": "90%", "Metric_2": ""},
+        {"Alert ID": "ALT-1017", "Alert Name": "Cap Optimal - Tool H", "Date/Time": "2026-04-28 10:00:00", "Frequency": "Daily", "Tool": "Tool_H", "Part": "Part 107", "Supplier": "Supplier Z", "Plant": "Plant 3", "Tooling Type": "Injection", "OEM Division": "Div C", "Severity": "Normal", "Alert Type": "Capacity Risk (Optimal)", "Metric_1": "0%", "Metric_2": ""},
+        {"Alert ID": "ALT-1018", "Alert Name": "Cap Target - Tool I", "Date/Time": "2026-04-28 10:00:00", "Frequency": "Monthly", "Tool": "Tool_I", "Part": "Part 108", "Supplier": "Supplier X", "Plant": "Plant 1", "Tooling Type": "Injection", "OEM Division": "Div A", "Severity": "Normal", "Alert Type": "Capacity Risk (Target)", "Metric_1": "0%", "Metric_2": ""},
+        {"Alert ID": "ALT-1019", "Alert Name": "EOL Util - Tool J", "Date/Time": "2026-04-28 10:00:00", "Frequency": "Daily", "Tool": "Tool_J", "Part": "Part 109", "Supplier": "Supplier Y", "Plant": "Plant 2", "Tooling Type": "Stamping", "OEM Division": "Div B", "Severity": "Normal", "Alert Type": "Tooling EOL (Utilization)", "Metric_1": "40%", "Metric_2": ""},
     ]
     st.session_state.client_alerts_db = pd.DataFrame(mock_data)
 
@@ -177,8 +184,8 @@ def generate_fpdf_report(df):
     categories = ['Cycle', 'Run Rate', 'Cap Risk', 'EOL']
     level1 = [14, 22, 9, 12]
     level2 = [5, 8, 3, 4]
-    ax2.bar(categories, level1, label='Level 1', color='#60a5fa', width=0.6)
-    ax2.bar(categories, level2, bottom=level1, label='Level 2', color='#1e3a8a', width=0.6)
+    ax2.bar(categories, level1, label='Warning', color='#60a5fa', width=0.6)
+    ax2.bar(categories, level2, bottom=level1, label='Critical', color='#1e3a8a', width=0.6)
     ax2.legend(loc='upper right', frameon=False)
     ax2.spines['top'].set_visible(False)
     ax2.spines['right'].set_visible(False)
@@ -871,21 +878,23 @@ elif page == "Client Alerts Portal":
                 st.write("")
 
         # Helper functions for the custom graph-based dashboards
-        sev_colors = {'Level 1': '#f59e0b', 'Level 2': '#ef4444', 'Event': '#8b5cf6', 'Status': '#64748b'}
+        sev_colors = {'Normal': '#10b981', 'Warning': '#f59e0b', 'Critical': '#ef4444', 'Event': '#8b5cf6', 'Status': '#64748b'}
         status_colors = {'Sensor Offline': '#f87171', 'Sensor Detached': '#facc15', 'Inactive': '#94a3b8'}
 
         def render_matplot_bar(df_subset, title):
             fig, ax = plt.subplots(figsize=(5, 3.5))
-            if df_subset.empty:
-                ax.text(0.5, 0.5, 'No Active Alerts', ha='center', va='center', color='#94a3b8')
-            else:
-                counts = df_subset['Severity'].value_counts().sort_index()
-                colors = [sev_colors.get(x, '#3b82f6') for x in counts.index]
-                bars = ax.bar(counts.index, counts.values, color=colors, width=0.5)
-                # Apply data labels directly onto the bars
-                for bar in bars:
-                    yval = bar.get_height()
-                    ax.text(bar.get_x() + bar.get_width()/2, yval + 0.1, int(yval), ha='center', va='bottom', fontsize=10, fontweight='bold')
+            
+            # Ensure consistent 3-level categories representation in every graph
+            categories = ['Normal', 'Warning', 'Critical']
+            counts = df_subset['Severity'].value_counts() if not df_subset.empty else pd.Series(dtype=int)
+            plot_data = [counts.get(cat, 0) for cat in categories]
+            colors = [sev_colors.get(cat, '#3b82f6') for cat in categories]
+            
+            bars = ax.bar(categories, plot_data, color=colors, width=0.5)
+            # Apply data labels directly onto the bars
+            for bar in bars:
+                yval = bar.get_height()
+                ax.text(bar.get_x() + bar.get_width()/2, yval + 0.1, int(yval), ha='center', va='bottom', fontsize=10, fontweight='bold')
             
             ax.set_title(title, fontsize=11, fontweight='bold', color='#1e40af', pad=10)
             ax.set_ylabel("Tool Count", fontsize=9)
@@ -898,7 +907,7 @@ elif page == "Client Alerts Portal":
 
         def render_matplot_donut(counts_series, title, color_map):
             fig, ax = plt.subplots(figsize=(4.5, 4.5))
-            if counts_series.empty:
+            if counts_series.empty or counts_series.sum() == 0:
                 ax.text(0.5, 0.5, 'No Active Alerts', ha='center', va='center', color='#94a3b8')
             else:
                 colors = [color_map.get(x, '#3b82f6') for x in counts_series.index]
@@ -924,12 +933,11 @@ elif page == "Client Alerts Portal":
             st.write("High-level summary of all active alerts matching your current filters.")
 
             # --- 1. Core KPIs ---
-            kpi1, kpi2, kpi3, kpi4, kpi5 = st.columns(5)
+            kpi1, kpi2, kpi3, kpi4 = st.columns(4)
             kpi1.markdown(f"<div class='metric-card'><div class='metric-title'>Total Active Alerts</div><div class='metric-value'>{len(df)}</div></div>", unsafe_allow_html=True)
             kpi2.markdown(f"<div class='metric-card'><div class='metric-title'>Impacted Tools</div><div class='metric-value'>{df['Tool'].nunique()}</div></div>", unsafe_allow_html=True)
             kpi3.markdown(f"<div class='metric-card'><div class='metric-title'>Impacted Plants</div><div class='metric-value'>{df['Plant'].nunique()}</div></div>", unsafe_allow_html=True)
             kpi4.markdown(f"<div class='metric-card'><div class='metric-title'>Impacted Suppliers</div><div class='metric-value'>{df['Supplier'].nunique()}</div></div>", unsafe_allow_html=True)
-            kpi5.markdown(f"<div class='metric-card'><div class='metric-title'>OEM Divisions</div><div class='metric-value'>{df['OEM Division'].nunique()}</div></div>", unsafe_allow_html=True)
 
             st.divider()
 
@@ -944,21 +952,21 @@ elif page == "Client Alerts Portal":
                 if MATPLOTLIB_AVAILABLE: 
                     render_matplot_bar(ct_df, "Cycle Time Deviations")
                 with st.expander("Definitions & Thresholds"):
-                    st.markdown("- **Level 1:** > 0% and ≤ 5% deviation\n- **Level 2:** > 5% and ≤ 15% deviation")
+                    st.markdown("- **Normal:** ≤ 0% deviation\n- **Warning:** > 0% and ≤ 5% deviation\n- **Critical:** > 5% and ≤ 15% deviation")
                 
                 st.markdown("##### Run Rate Stability")
                 rr_stab_df = df[df['Alert Type'] == 'Low Run Rate - Time Stability']
                 if MATPLOTLIB_AVAILABLE: 
                     render_matplot_bar(rr_stab_df, "Low Time Stability")
                 with st.expander("Definitions & Thresholds"):
-                    st.markdown("- **Level 1:** 75% ≤ rate < 85%\n- **Level 2:** 60% ≤ rate < 75%")
+                    st.markdown("- **Normal:** ≥ 85%\n- **Warning:** 75% ≤ rate < 85%\n- **Critical:** 60% ≤ rate < 75%")
 
                 st.markdown("##### Loss vs. Target Capacity")
                 cr_tgt_df = df[df['Alert Type'] == 'Capacity Risk (Target)']
                 if MATPLOTLIB_AVAILABLE: 
                     render_matplot_bar(cr_tgt_df, "Loss vs Target Capacity")
                 with st.expander("Definitions & Thresholds"):
-                    st.markdown("- **Level 1:** > 0% and ≤ 5% loss\n- **Level 2:** > 5% and ≤ 10% loss")
+                    st.markdown("- **Normal:** 0% loss\n- **Warning:** > 0% and ≤ 5% loss\n- **Critical:** > 5% and ≤ 10% loss")
 
                 st.markdown("##### Operation Status")
                 os_target_cats = ['Sensor Offline', 'Sensor Detached', 'Inactive']
@@ -975,22 +983,27 @@ elif page == "Client Alerts Portal":
                 if MATPLOTLIB_AVAILABLE: 
                     render_matplot_bar(rr_eff_df, "Low Shot Efficiency")
                 with st.expander("Definitions & Thresholds"):
-                    st.markdown("- **Level 1:** 75% ≤ rate < 85%\n- **Level 2:** 60% ≤ rate < 75%")
+                    st.markdown("- **Normal:** ≥ 85%\n- **Warning:** 75% ≤ rate < 85%\n- **Critical:** 60% ≤ rate < 75%")
 
                 st.markdown("##### Loss vs. Optimal Capacity")
                 cr_opt_df = df[df['Alert Type'] == 'Capacity Risk (Optimal)']
                 if MATPLOTLIB_AVAILABLE: 
                     render_matplot_bar(cr_opt_df, "Loss vs Optimal Capacity")
                 with st.expander("Definitions & Thresholds"):
-                    st.markdown("- **Level 1:** > 0% and ≤ 5% loss\n- **Level 2:** > 5% and ≤ 15% loss")
+                    st.markdown("- **Normal:** 0% loss\n- **Warning:** > 0% and ≤ 5% loss\n- **Critical:** > 5% and ≤ 15% loss")
 
                 st.markdown("##### Tooling End of Life")
                 eol_df = df[df['Alert Type'].str.contains('EOL')]
-                eol_counts = eol_df['Severity'].value_counts().sort_index()
+                
+                # Force Donut to display only 3 defined levels
+                categories = ['Normal', 'Warning', 'Critical']
+                eol_counts = eol_df['Severity'].value_counts()
+                eol_counts_aligned = pd.Series({cat: eol_counts.get(cat, 0) for cat in categories})
+                eol_counts_aligned = eol_counts_aligned[eol_counts_aligned > 0] # Remove empty segments
                 if MATPLOTLIB_AVAILABLE: 
-                    render_matplot_donut(eol_counts, "EOL Severity Distribution", sev_colors)
+                    render_matplot_donut(eol_counts_aligned, "EOL Severity Distribution", sev_colors)
                 with st.expander("Definitions & Thresholds"):
-                    st.markdown("- **Level 1:** Utilization 80%-90% OR Remaining ≤ 30 days\n- **Level 2:** Utilization > 90% OR Remaining ≤ 10 days")
+                    st.markdown("- **Normal:** Utilization < 80% AND Remaining > 30 days\n- **Warning:** Utilization 80%-90% OR Remaining ≤ 30 days\n- **Critical:** Utilization > 90% OR Remaining ≤ 10 days")
 
             st.divider()
 
@@ -1070,7 +1083,7 @@ elif page == "Client Alerts Portal":
         
         # Severity Badge
         sev = alert_data['Severity']
-        color = "#EF4444" if "Level 2" in sev else "#F59E0B" if "Level 1" in sev else "#3B82F6"
+        color = "#EF4444" if "Critical" in sev else "#F59E0B" if "Warning" in sev else "#10B981" if "Normal" in sev else "#3B82F6"
         st.markdown(f"<div style='background-color: {color}; color: white; padding: 4px 12px; border-radius: 20px; display: inline-block; font-weight: bold; font-size: 0.9rem; margin-bottom: 20px;'>Severity: {sev}</div>", unsafe_allow_html=True)
         
         # Top Metrics Cards (General Info)
