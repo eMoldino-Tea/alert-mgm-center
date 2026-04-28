@@ -92,7 +92,8 @@ st.markdown("""
     .metric-value { color: #0F172A; font-size: 1.8rem; font-weight: bold; }
     
     /* Action Command Center Cards */
-    .action-card { background-color: white; border-top: 4px solid #EF4444; border-left: 1px solid #E2E8F0; border-right: 1px solid #E2E8F0; border-bottom: 1px solid #E2E8F0; border-radius: 8px; padding: 20px; box-shadow: 0 4px 6px -1px rgba(0, 0, 0, 0.1); }
+    .action-card { background-color: white; border-top: 4px solid #EF4444; border-left: 1px solid #E2E8F0; border-right: 1px solid #E2E8F0; border-bottom: 1px solid #E2E8F0; border-radius: 8px; padding: 20px; margin-bottom: 5px; box-shadow: 0 4px 6px -1px rgba(0, 0, 0, 0.1); transition: all 0.2s ease; cursor: pointer; }
+    .action-card:hover { box-shadow: 0 10px 15px -3px rgba(0, 0, 0, 0.1); transform: translateY(-2px); border-top-color: #D97706; }
     .action-card-warning { border-top: 4px solid #F59E0B; }
     .risk-score-badge { float: right; background-color: #FEE2E2; color: #991B1B; padding: 4px 10px; border-radius: 20px; font-weight: bold; font-size: 0.9rem; }
     .risk-score-warning { background-color: #FEF3C7; color: #92400E; }
@@ -691,9 +692,9 @@ elif page == "Client Alerts Portal":
 
     @st.dialog("Top Plant Details", width="large")
     def top_plant_popup(plant, subset):
-        suppliers = ", ".join(subset['Supplier'].unique())
+        supplier = subset['Supplier'].iloc[0] if not subset.empty else "N/A"
         st.markdown(f"### {plant}")
-        st.markdown(f"**Supplier(s):** {suppliers}")
+        st.markdown(f"**Supplier:** {supplier}")
         disp = subset.sort_values('Risk Score', ascending=False)[['Tool', 'Alert Type', 'Severity', 'Frequency', 'Date/Time']].rename(columns={'Tool':'Tooling ID', 'Severity': 'Level'})
         st.dataframe(disp, hide_index=True, use_container_width=True)
 
@@ -702,7 +703,7 @@ elif page == "Client Alerts Portal":
         plants = ", ".join(subset['Plant'].unique())
         st.markdown(f"### {supplier}")
         st.markdown(f"**Plant(s):** {plants}")
-        disp = subset.sort_values('Risk Score', ascending=False)[['Tool', 'Alert Type', 'Severity', 'Frequency', 'Date/Time']].rename(columns={'Tool':'Tooling ID', 'Severity': 'Level'})
+        disp = subset.sort_values('Risk Score', ascending=False)[['Tool', 'Plant', 'Alert Type', 'Severity', 'Frequency', 'Date/Time']].rename(columns={'Tool':'Tooling ID', 'Severity': 'Level'})
         st.dataframe(disp, hide_index=True, use_container_width=True)
 
     # ---------------------------------------------------------
@@ -893,7 +894,7 @@ elif page == "Client Alerts Portal":
         st.markdown("### Top Impacted Entities")
         t1, t2, t3 = st.columns(3)
         with t1:
-            st.markdown("**Top Tools**")
+            st.markdown("**Top Impacted Tools**")
             top_tools = df['Tool'].value_counts().head(5).reset_index()
             top_tools.columns = ['Tool', 'Alerts']
             c1, c2 = st.columns([3, 1])
@@ -905,7 +906,7 @@ elif page == "Client Alerts Portal":
                 if c2.button(str(row['Alerts']), key=f"btn_top_tool_{row['Tool']}", use_container_width=True):
                     top_tool_popup(row['Tool'], df[df['Tool'] == row['Tool']])
         with t2:
-            st.markdown("**Top Plants**")
+            st.markdown("**Top Impacted Plants**")
             top_plants = df['Plant'].value_counts().head(5).reset_index()
             top_plants.columns = ['Plant', 'Alerts']
             c1, c2 = st.columns([3, 1])
@@ -917,7 +918,7 @@ elif page == "Client Alerts Portal":
                 if c2.button(str(row['Alerts']), key=f"btn_top_plant_{row['Plant']}", use_container_width=True):
                     top_plant_popup(row['Plant'], df[df['Plant'] == row['Plant']])
         with t3:
-            st.markdown("**Top Suppliers**")
+            st.markdown("**Top Impacted Suppliers**")
             top_suppliers = df['Supplier'].value_counts().head(5).reset_index()
             top_suppliers.columns = ['Supplier', 'Alerts']
             c1, c2 = st.columns([3, 1])
