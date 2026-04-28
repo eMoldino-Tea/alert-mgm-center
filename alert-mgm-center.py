@@ -4,6 +4,7 @@ import datetime
 import os
 import tempfile
 import random
+import altair as alt
 
 # --- PAGE CONFIGURATION ---
 st.set_page_config(
@@ -609,42 +610,9 @@ elif page == "Client Alerts Portal":
                     st.dataframe(out_df, use_container_width=True, hide_index=True)
                 st.write("")
 
-        # Helper functions for the custom graph-based dashboards
+        # Helper Maps
         sev_colors = {'Level 1': '#FACC15', 'Level 2': '#F59E0B', 'Level 3': '#EF4444', 'Event': '#8B5CF6', 'Status': '#64748B'}
         status_colors = {'Sensor Offline': '#F87171', 'Sensor Detached': '#FACC15', 'Inactive': '#94A3B8'}
-
-        def render_matplot_bar(df_subset):
-            fig, ax = plt.subplots(figsize=(5, 3.2))
-            categories = ['Level 1', 'Level 2', 'Level 3']
-            counts = df_subset['Severity'].value_counts() if not df_subset.empty else pd.Series(dtype=int)
-            plot_data = [counts.get(cat, 0) for cat in categories]
-            colors = [sev_colors.get(cat, '#3B82F6') for cat in categories]
-            
-            bars = ax.bar(categories, plot_data, color=colors, width=0.5)
-            for bar in bars:
-                yval = bar.get_height()
-                ax.text(bar.get_x() + bar.get_width()/2, yval + 0.5, int(yval), ha='center', va='bottom', fontsize=10, fontweight='bold')
-            
-            ax.set_ylabel("Tool Count", fontsize=9)
-            ax.set_ylim(0, max(plot_data) * 1.2 if max(plot_data) > 0 else 10)
-            ax.spines['top'].set_visible(False)
-            ax.spines['right'].set_visible(False)
-            ax.spines['left'].set_color('#CBD5E1')
-            ax.spines['bottom'].set_color('#CBD5E1')
-            plt.tight_layout()
-            st.pyplot(fig)
-
-        def render_matplot_donut(counts_series, color_map):
-            fig, ax = plt.subplots(figsize=(4.5, 4.5))
-            if counts_series.empty or counts_series.sum() == 0:
-                ax.text(0.5, 0.5, 'No Active Alerts', ha='center', va='center', color='#94A3B8')
-                ax.axis('off')
-            else:
-                colors = [color_map.get(x, '#3B82F6') for x in counts_series.index]
-                ax.pie(counts_series.values, labels=counts_series.index, autopct='%1.0f%%', startangle=90, colors=colors,
-                       wedgeprops=dict(width=0.4, edgecolor='white', linewidth=2), textprops={'fontsize': 10})
-            plt.tight_layout()
-            st.pyplot(fig)
 
         @st.dialog("High Risk Alerts", width="large")
         def act_now_popup(tool_name, tool_alerts_df):
@@ -661,12 +629,29 @@ elif page == "Client Alerts Portal":
                 return
             level_df = level_df.copy()
             level_df['Exact calculation/value'] = level_df.apply(format_trigger_value, axis=1)
+            
             display_cols = {
                 "Tool": "Tooling ID", "Part": "Part ID (Part Name)", 
                 "OEM Division": "OEM Business Division", "Supplier": "Supplier", 
-                "Plant": "Plant", "Tooling Type": "Tooling Type", 
-                "Exact calculation/value": "Exact calculation/value", "Date/Time": "Date & Time"
+                "Plant": "Plant", "Tooling Type": "Tooling Type"
             }
+            
+            # Dynamic Column Mapping
+            if a_type_label == "Cycle Time Deviations":
+                display_cols["Metric_1"] = "% of Deviation"
+            elif a_type_label == "Low Run Rate Shot Efficiency":
+                display_cols["Metric_1"] = "Run Rate Shot Efficiency"
+            elif a_type_label == "Low Run Rate Time Stability":
+                display_cols["Metric_1"] = "Run Rate Time Stability"
+            elif a_type_label in ["Loss vs. Optimal Capacity", "Loss vs. Target Capacity"]:
+                display_cols["Metric_1"] = "% of Loss"
+            elif a_type_label == "Tooling End of Life":
+                display_cols["Metric_1"] = "Utilization Rate"
+            elif a_type_label == "Operation Status":
+                pass 
+
+            display_cols["Date/Time"] = "Date & Time" 
+
             out_df = level_df.sort_values(by='Risk Score', ascending=False)[list(display_cols.keys())].rename(columns=display_cols)
             st.dataframe(out_df, hide_index=True, use_container_width=True)
 
@@ -679,6 +664,72 @@ elif page == "Client Alerts Portal":
                     else:
                         lvl_df = df_subset[df_subset['Severity'] == lvl]
                     category_popup(label, lvl, lvl_df)
+
+        def render_interactive_bar(df_subset, label):
+            categories = ['Level 1', 'Level 2', 'Level 3']
+            counts = df_subset['Severity'].value_counts() if not df_subset.empty else pd.Series(dtype=int)
+            data = pd.DataFrame({
+                'Level': categories,
+                'Count': [counts.get(cat, 0) for cat in categories],
+                'Color': [sev_colors.get(cat, '#3B82F6') for cat in categories]
+            })
+            selection = alt.selection_point(fields=['Level'], name='select')
+            chart = alt.Chart(data).mark_bar().encode(
+                x=alt.X('Level:N', sort=categories, axis=alt.Axis(labelAngle=0, title=None)),
+                y=alt.Y('Count:Q', title='Tool Count'),
+                color=alt.Color('Color:N', scale=None, legend=None),
+                opacity=alt.condition(selection, alt.value(1), alt.value(0.7)),
+                tooltip=['Level', 'Count']
+            ).add_params(selection).properties(height=250)
+            
+            try:
+                event = st.altair_chart(chart, use_container_width=True, on_select="rerun")
+                if event and hasattr(event, 'selection') and 'select' in event.selection and event.selection['select']:
+                    selected_level = event.selection['select'][0]['Level']
+                    lvl_df = df_subset[df_subset['Severity'] == selected_level]
+                    category_popup(label, selected_level, lvl_df)
+            except TypeError:
+                st.altair_chart(chart, use_container_width=True)
+                render_breakdown_actions(label, df_subset, categories)
+
+        def render_interactive_donut(df_subset, label, categories, color_map, is_status=False):
+            if is_status:
+                counts = df_subset['Alert Type'].apply(lambda x: x.replace("Operation Status (", "").replace(")", "")).value_counts()
+            else:
+                counts = df_subset['Severity'].value_counts()
+
+            data = pd.DataFrame({
+                'Category': categories,
+                'Count': [counts.get(cat, 0) for cat in categories]
+            })
+            data = data[data['Count'] > 0]
+            if data.empty:
+                st.info("No Active Alerts")
+                return
+
+            domain = categories
+            range_colors = [color_map.get(cat, '#3B82F6') for cat in categories]
+            selection = alt.selection_point(fields=['Category'], name='select')
+            
+            chart = alt.Chart(data).mark_arc(innerRadius=50).encode(
+                theta=alt.Theta(field="Count", type="quantitative"),
+                color=alt.Color(field="Category", type="nominal", scale=alt.Scale(domain=domain, range=range_colors), legend=alt.Legend(title=None)),
+                tooltip=['Category', 'Count'],
+                opacity=alt.condition(selection, alt.value(1), alt.value(0.7))
+            ).add_params(selection).properties(height=250)
+
+            try:
+                event = st.altair_chart(chart, use_container_width=True, on_select="rerun")
+                if event and hasattr(event, 'selection') and 'select' in event.selection and event.selection['select']:
+                    selected_cat = event.selection['select'][0]['Category']
+                    if is_status:
+                        lvl_df = df_subset[df_subset['Alert Type'].str.contains(selected_cat)]
+                    else:
+                        lvl_df = df_subset[df_subset['Severity'] == selected_cat]
+                    category_popup(label, selected_cat, lvl_df)
+            except TypeError:
+                st.altair_chart(chart, use_container_width=True)
+                render_breakdown_actions(label, df_subset, categories, is_status=is_status)
 
         # 6 Main Tabs for the Client Portal
         cat_tabs = st.tabs([
@@ -724,7 +775,7 @@ elif page == "Client Alerts Portal":
                         </div>
                         """, unsafe_allow_html=True)
                         
-                        if st.button("📊 View Tool Alerts", key=f"view_tool_{idx}", use_container_width=True):
+                        if st.button("📊 View Alerts", key=f"view_tool_{idx}", use_container_width=True):
                             act_now_popup(tool_data['Tool'], tool_alerts)
             
             st.divider()
@@ -737,61 +788,48 @@ elif page == "Client Alerts Portal":
             with c1:
                 st.markdown("##### Cycle Time Deviations")
                 ct_df = df[df['Alert Type'] == 'Cycle Time']
-                if MATPLOTLIB_AVAILABLE: render_matplot_bar(ct_df)
+                render_interactive_bar(ct_df, "Cycle Time Deviations")
                 with st.expander("Definitions & Thresholds"):
                     st.markdown("- **Level 1:** > 0% and ≤ 5% deviation\n- **Level 2:** > 5% and ≤ 15% deviation\n- **Level 3:** > 15% deviation")
-                render_breakdown_actions("Cycle Time Deviations", ct_df, ['Level 1', 'Level 2', 'Level 3'])
                 
                 st.markdown("##### Low Run Rate Time Stability")
                 rr_stab_df = df[df['Alert Type'] == 'Low Run Rate - Time Stability']
-                if MATPLOTLIB_AVAILABLE: render_matplot_bar(rr_stab_df)
+                render_interactive_bar(rr_stab_df, "Low Run Rate Time Stability")
                 with st.expander("Definitions & Thresholds"):
                     st.markdown("- **Level 1:** 75% ≤ rate < 85%\n- **Level 2:** 60% ≤ rate < 75%\n- **Level 3:** < 60%")
-                render_breakdown_actions("Low Run Rate Time Stability", rr_stab_df, ['Level 1', 'Level 2', 'Level 3'])
 
                 st.markdown("##### Loss vs. Target Capacity")
                 cr_tgt_df = df[df['Alert Type'] == 'Capacity Risk (Target)']
-                if MATPLOTLIB_AVAILABLE: render_matplot_bar(cr_tgt_df)
+                render_interactive_bar(cr_tgt_df, "Loss vs. Target Capacity")
                 with st.expander("Definitions & Thresholds"):
                     st.markdown("- **Level 1:** > 0% and ≤ 5% loss\n- **Level 2:** > 5% and ≤ 10% loss\n- **Level 3:** > 10% loss")
-                render_breakdown_actions("Loss vs. Target Capacity", cr_tgt_df, ['Level 1', 'Level 2', 'Level 3'])
 
                 st.markdown("##### Operation Status")
                 os_target_cats = ['Sensor Offline', 'Sensor Detached', 'Inactive']
                 os_df = df[df['Alert Type'].apply(lambda x: any(cat in x for cat in os_target_cats))]
-                os_counts = os_df['Alert Type'].apply(lambda x: x.replace("Operation Status (", "").replace(")", "")).value_counts()
-                os_aligned = pd.Series({cat: os_counts.get(cat, 0) for cat in os_target_cats})
-                os_aligned = os_aligned[os_aligned > 0] 
-                if MATPLOTLIB_AVAILABLE: render_matplot_donut(os_aligned, status_colors)
+                render_interactive_donut(os_df, "Operation Status", os_target_cats, status_colors, is_status=True)
                 with st.expander("Definitions & Categories"):
                     st.markdown("- **Sensor Offline:** Sensor heartbeat lost.\n- **Sensor Detached:** Physical detachment detected.\n- **Inactive:** Tool idle beyond threshold.")
-                render_breakdown_actions("Operation Status", os_df, os_target_cats, is_status=True)
 
             with c2:
                 st.markdown("##### Low Run Rate Shot Efficiency")
                 rr_eff_df = df[df['Alert Type'] == 'Low Run Rate - Shot Efficiency']
-                if MATPLOTLIB_AVAILABLE: render_matplot_bar(rr_eff_df)
+                render_interactive_bar(rr_eff_df, "Low Run Rate Shot Efficiency")
                 with st.expander("Definitions & Thresholds"):
                     st.markdown("- **Level 1:** 75% ≤ rate < 85%\n- **Level 2:** 60% ≤ rate < 75%\n- **Level 3:** < 60%")
-                render_breakdown_actions("Low Run Rate Shot Efficiency", rr_eff_df, ['Level 1', 'Level 2', 'Level 3'])
 
                 st.markdown("##### Loss vs. Optimal Capacity")
                 cr_opt_df = df[df['Alert Type'] == 'Capacity Risk (Optimal)']
-                if MATPLOTLIB_AVAILABLE: render_matplot_bar(cr_opt_df)
+                render_interactive_bar(cr_opt_df, "Loss vs. Optimal Capacity")
                 with st.expander("Definitions & Thresholds"):
                     st.markdown("- **Level 1:** > 0% and ≤ 5% loss\n- **Level 2:** > 5% and ≤ 10% loss\n- **Level 3:** > 10% loss")
-                render_breakdown_actions("Loss vs. Optimal Capacity", cr_opt_df, ['Level 1', 'Level 2', 'Level 3'])
 
                 st.markdown("##### Tooling End of Life")
                 eol_df = df[df['Alert Type'].str.contains('EOL')]
                 categories = ['Level 1', 'Level 2', 'Level 3']
-                eol_counts = eol_df['Severity'].value_counts()
-                eol_counts_aligned = pd.Series({cat: eol_counts.get(cat, 0) for cat in categories})
-                eol_counts_aligned = eol_counts_aligned[eol_counts_aligned > 0]
-                if MATPLOTLIB_AVAILABLE: render_matplot_donut(eol_counts_aligned, sev_colors)
+                render_interactive_donut(eol_df, "Tooling End of Life", categories, sev_colors)
                 with st.expander("Definitions & Thresholds"):
                     st.markdown("- **Level 1:** Utilization 70%-80% OR Remaining ≤ 45 days\n- **Level 2:** Utilization 80%-90% OR Remaining ≤ 30 days\n- **Level 3:** Utilization > 90% OR Remaining ≤ 10 days")
-                render_breakdown_actions("Tooling End of Life", eol_df, ['Level 1', 'Level 2', 'Level 3'])
 
             st.divider()
 
