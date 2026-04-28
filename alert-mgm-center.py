@@ -934,6 +934,68 @@ elif page == "Client Alerts Portal":
 
             st.divider()
 
+            # --- Detailed Category Breakdowns ---
+            st.markdown("#### 📑 Detailed Category Breakdowns")
+            
+            c1, c2 = st.columns(2)
+            
+            with c1:
+                st.markdown("**1. Cycle Time**")
+                ct_df = df[df['Alert Type'] == 'Cycle Time']
+                st.dataframe(pd.DataFrame([
+                    {"Level": "Level 1", "Definition (Deviation)": "> 0% and ≤ 5%", "Tool Count": len(ct_df[ct_df['Severity'] == 'Level 1'])},
+                    {"Level": "Level 2", "Definition (Deviation)": "> 5% and ≤ 15%", "Tool Count": len(ct_df[ct_df['Severity'] == 'Level 2'])}
+                ]), hide_index=True, use_container_width=True)
+                
+                st.markdown("**2. Run Rate Shot Efficiency**")
+                rr_eff_df = df[df['Alert Type'] == 'Low Run Rate - Shot Efficiency']
+                st.dataframe(pd.DataFrame([
+                    {"Level": "Level 1", "Definition (Efficiency)": "75% ≤ rate < 85%", "Tool Count": len(rr_eff_df[rr_eff_df['Severity'] == 'Level 1'])},
+                    {"Level": "Level 2", "Definition (Efficiency)": "60% ≤ rate < 75%", "Tool Count": len(rr_eff_df[rr_eff_df['Severity'] == 'Level 2'])}
+                ]), hide_index=True, use_container_width=True)
+
+                st.markdown("**3. Loss vs. Optimal Capacity**")
+                cr_opt_df = df[df['Alert Type'] == 'Capacity Risk (Optimal)']
+                st.dataframe(pd.DataFrame([
+                    {"Level": "Level 1", "Definition (Loss %)": "> 0% and ≤ 5%", "Tool Count": len(cr_opt_df[cr_opt_df['Severity'] == 'Level 1'])},
+                    {"Level": "Level 2", "Definition (Loss %)": "> 5% and ≤ 15%", "Tool Count": len(cr_opt_df[cr_opt_df['Severity'] == 'Level 2'])}
+                ]), hide_index=True, use_container_width=True)
+
+            with c2:
+                st.markdown("**4. Run Rate Time Stability**")
+                rr_stab_df = df[df['Alert Type'] == 'Low Run Rate - Time Stability']
+                st.dataframe(pd.DataFrame([
+                    {"Level": "Level 1", "Definition (Stability)": "75% ≤ rate < 85%", "Tool Count": len(rr_stab_df[rr_stab_df['Severity'] == 'Level 1'])},
+                    {"Level": "Level 2", "Definition (Stability)": "60% ≤ rate < 75%", "Tool Count": len(rr_stab_df[rr_stab_df['Severity'] == 'Level 2'])}
+                ]), hide_index=True, use_container_width=True)
+
+                st.markdown("**5. Loss vs. Target Capacity**")
+                cr_tgt_df = df[df['Alert Type'] == 'Capacity Risk (Target)']
+                st.dataframe(pd.DataFrame([
+                    {"Level": "Level 1", "Definition (Loss %)": "> 0% and ≤ 5%", "Tool Count": len(cr_tgt_df[cr_tgt_df['Severity'] == 'Level 1'])},
+                    {"Level": "Level 2", "Definition (Loss %)": "> 5% and ≤ 10%", "Tool Count": len(cr_tgt_df[cr_tgt_df['Severity'] == 'Level 2'])}
+                ]), hide_index=True, use_container_width=True)
+
+                st.markdown("**6. Tooling End of Life**")
+                eol_df = df[df['Alert Type'].str.contains('EOL')]
+                st.dataframe(pd.DataFrame([
+                    {"Level": "Level 1", "Utilization Rate": "80% - 90%", "Remaining Days": "11 - 30 days", "Tool Count": len(eol_df[eol_df['Severity'] == 'Level 1'])},
+                    {"Level": "Level 2", "Utilization Rate": "> 90%", "Remaining Days": "≤ 10 days", "Tool Count": len(eol_df[eol_df['Severity'] == 'Level 2'])}
+                ]), hide_index=True, use_container_width=True)
+
+            st.markdown("**7. Operation Status**")
+            os_df = df[df['Alert Type'].str.contains('Operation Status')]
+            
+            c_os1, c_os2 = st.columns([1, 1])
+            with c_os1:
+                st.dataframe(pd.DataFrame([
+                    {"Status Category": "Sensor Offline", "Tool Count": len(os_df[os_df['Alert Type'].str.contains('Offline')])},
+                    {"Status Category": "Sensor Detached", "Tool Count": len(os_df[os_df['Alert Type'].str.contains('Detached')])},
+                    {"Status Category": "Inactive", "Tool Count": len(os_df[os_df['Alert Type'].str.contains('Inactive')])}
+                ]), hide_index=True, use_container_width=True)
+
+            st.divider()
+
             # --- 4. Top Impacted Entities ---
             st.markdown("#### 🎯 Top Impacted Entities")
             t1, t2, t3 = st.columns(3)
