@@ -100,23 +100,18 @@ st.markdown("""
     .card-tool { font-size: 1.3rem; font-weight: bold; color: #1E293B; margin-bottom: 5px;}
     .card-context { font-size: 0.95rem; color: #475569; margin-bottom: 0px; }
     
-    /* Robust Overlay logic using Streamlit's auto-generated key classes to eliminate empty boxes */
-    div[data-testid="column"] {
-        position: relative !important;
+    /* Clean overlay logic to preserve native scrolling */
+    .act-now-card {
+        height: 145px !important;
     }
     .st-key-act_now_btn_0, .st-key-act_now_btn_1, .st-key-act_now_btn_2 {
-        position: absolute !important;
-        top: 0 !important;
-        left: 0 !important;
-        width: 100% !important;
-        height: 100% !important;
-        z-index: 999 !important;
-        opacity: 0 !important;
-        background: transparent !important;
+        margin-top: -155px !important;
+        position: relative !important;
+        z-index: 99 !important;
     }
     .st-key-act_now_btn_0 button, .st-key-act_now_btn_1 button, .st-key-act_now_btn_2 button {
+        height: 145px !important;
         width: 100% !important;
-        height: 100% !important;
         background: transparent !important;
         border: none !important;
         color: transparent !important;
