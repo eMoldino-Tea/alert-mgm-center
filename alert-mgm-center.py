@@ -76,11 +76,6 @@ if 'client_alerts_db' not in st.session_state:
                 alert_id_counter += 1
     st.session_state.client_alerts_db = pd.DataFrame(mock_data)
 
-if 'client_portal_view' not in st.session_state:
-    st.session_state.client_portal_view = "list"
-if 'selected_alert_id' not in st.session_state:
-    st.session_state.selected_alert_id = None
-
 # --- CUSTOM STYLING ---
 st.markdown("""
     <style>
@@ -531,427 +526,383 @@ elif page == "Global Dashboard":
 # ==========================================
 elif page == "Client Alerts Portal":
     
-    def set_view(view_mode, alert_id=None):
-        st.session_state.client_portal_view = view_mode
-        st.session_state.selected_alert_id = alert_id
+    st.markdown('<div class="main-header">Alerts Command Center</div>', unsafe_allow_html=True)
+    st.markdown('<div class="sub-header">Triage critical issues, identify supply chain bottlenecks, and track proactive watchlists.</div>', unsafe_allow_html=True)
+    
+    df = st.session_state.client_alerts_db.copy()
+    
+    # Calculate dynamic risk score for workflow sorting
+    df['Risk Score'] = df.apply(calculate_risk_index, axis=1)
+    df = df.sort_values(by='Risk Score', ascending=False)
+    
+    if client_filters.get("OEM"): df = df[df['OEM Division'].isin(client_filters["OEM"])]
+    if client_filters.get("Supplier"): df = df[df['Supplier'].isin(client_filters["Supplier"])]
+    if client_filters.get("Plant"): df = df[df['Plant'].isin(client_filters["Plant"])]
+    if client_filters.get("Tooling Type"): df = df[df['Tooling Type'].isin(client_filters["Tooling Type"])]
+    if client_filters.get("Part"): df = df[df['Part'].isin(client_filters["Part"])]
+    if client_filters.get("Tooling"): df = df[df['Tool'].isin(client_filters["Tooling"])]
+    
+    search_query = st.text_input("🔍 Search (Tool, Part, Name)")
+    if search_query:
+        df = df[df.apply(lambda row: row.astype(str).str.contains(search_query, case=False).any(), axis=1)]
+
+    st.write("")
+    
+    def format_trigger_value(row):
+        val = str(row['Metric_1'])
+        if pd.notna(row['Metric_2']) and str(row['Metric_2']).strip():
+            val += f" | {row['Metric_2']}"
+        return val
+        
+    def render_alert_hierarchy(tab_df, tab_name):
+        if tab_df.empty:
+            st.info("No alerts found for this category with the current filters.")
+            return
+        
+        available_freqs = sorted(tab_df['Frequency'].unique().tolist())
+        selected_freqs = st.multiselect("Filter by Alert Frequency", options=available_freqs, default=available_freqs, key=f"freq_filter_{tab_name}")
+        filtered_df = tab_df[tab_df['Frequency'].isin(selected_freqs)].copy()
+        if filtered_df.empty:
+            st.info("No alerts match the selected frequency.")
+            return
+            
+        base_cols = {"Tool": "Tooling ID", "Part": "Part ID (Part Name)", "OEM Division": "OEM Business Division", "Supplier": "Supplier", "Plant": "Plant", "Tooling Type": "Tooling Type", "Severity": "Severity"}
+        for sev in sorted(filtered_df['Severity'].unique(), reverse=True):
+            st.markdown(f"#### 📌 {sev}")
+            sev_df = filtered_df[filtered_df['Severity'] == sev]
+            
+            for a_type in sorted(sev_df['Alert Type'].unique()):
+                type_df = sev_df[sev_df['Alert Type'] == a_type].copy()
+                display_cols = base_cols.copy()
+                
+                if a_type == "Cycle Time": display_cols["Metric_1"] = "% of deviation"
+                elif a_type == "Low Run Rate - Shot Efficiency": display_cols["Metric_1"] = "Run Rate Shot Efficiency"
+                elif a_type == "Low Run Rate - Time Stability": display_cols["Metric_1"] = "Run Rate Time Stability"
+                elif "Capacity Risk" in a_type: display_cols["Metric_1"] = "% of loss"
+                elif a_type == "Tooling EOL (Utilization)": display_cols["Metric_1"] = "Utilization Rate"
+                elif a_type == "Tooling EOL (Remaining Days)": display_cols["Metric_1"] = "Remaining Life (Days)"
+                elif a_type == "Tooling EOL (Combination)":
+                    display_cols["Metric_1"] = "Utilization Rate (%)"
+                    display_cols["Metric_2"] = "Remaining Life (days)"
+                elif a_type == "Operation Status (Tool Producing)": display_cols["Metric_1"] = "Date & Time"
+                elif a_type == "Operation Status (Tool Stops)": display_cols["Metric_1"] = "Tool Stops"
+                else:
+                    status_val = a_type.replace("Operation Status (", "").replace(")", "")
+                    type_df["Tooling Status"] = status_val
+                    display_cols["Tooling Status"] = "Tooling Status"
+                    display_cols["Metric_1"] = "Date & Time"
+                
+                out_df = type_df[list(display_cols.keys())].rename(columns=display_cols)
+                if len(sev_df['Alert Type'].unique()) > 1: st.markdown(f"##### {a_type}")
+                st.dataframe(out_df, use_container_width=True, hide_index=True)
+            st.write("")
+
+    # Helper Maps
+    sev_colors = {'Level 1': '#FACC15', 'Level 2': '#F59E0B', 'Level 3': '#EF4444', 'Event': '#8B5CF6', 'Status': '#64748B'}
+    status_colors = {'Sensor Offline': '#F87171', 'Sensor Detached': '#FACC15', 'Inactive': '#94A3B8'}
 
     # ---------------------------------------------------------
-    # MAIN LISTING PAGE & COMMAND CENTER
+    # INTERACTIVE POPUP DIALOGS
     # ---------------------------------------------------------
-    if st.session_state.client_portal_view == "list":
-        st.markdown('<div class="main-header">Alerts Command Center</div>', unsafe_allow_html=True)
-        st.markdown('<div class="sub-header">Triage critical issues, identify supply chain bottlenecks, and track proactive watchlists.</div>', unsafe_allow_html=True)
-        
-        df = st.session_state.client_alerts_db.copy()
-        
-        # Calculate dynamic risk score for workflow sorting
-        df['Risk Score'] = df.apply(calculate_risk_index, axis=1)
-        df = df.sort_values(by='Risk Score', ascending=False)
-        
-        if client_filters.get("OEM"): df = df[df['OEM Division'].isin(client_filters["OEM"])]
-        if client_filters.get("Supplier"): df = df[df['Supplier'].isin(client_filters["Supplier"])]
-        if client_filters.get("Plant"): df = df[df['Plant'].isin(client_filters["Plant"])]
-        if client_filters.get("Tooling Type"): df = df[df['Tooling Type'].isin(client_filters["Tooling Type"])]
-        if client_filters.get("Part"): df = df[df['Part'].isin(client_filters["Part"])]
-        if client_filters.get("Tooling"): df = df[df['Tool'].isin(client_filters["Tooling"])]
-        
-        search_query = st.text_input("🔍 Search (Tool, Part, Name)")
-        if search_query:
-            df = df[df.apply(lambda row: row.astype(str).str.contains(search_query, case=False).any(), axis=1)]
+    @st.dialog("High Risk Alerts", width="large")
+    def act_now_popup(tool_name, tool_alerts_df):
+        st.markdown(f"### {tool_name}")
+        sorted_df = tool_alerts_df.sort_values(by='Risk Score', ascending=False)
+        disp = sorted_df[['Alert Type', 'Severity', 'Frequency', 'Date/Time']].rename(columns={'Severity': 'Level'})
+        st.dataframe(disp, hide_index=True, use_container_width=True)
 
-        st.write("")
+    @st.dialog("Alert Details", width="large")
+    def category_popup(a_type_label, level, level_df):
+        st.markdown(f"### {a_type_label} - {level}")
+        if level_df.empty:
+            st.info("No alerts found for this selection.")
+            return
+        level_df = level_df.copy()
+        level_df['Exact calculation/value'] = level_df.apply(format_trigger_value, axis=1)
         
-        def format_trigger_value(row):
-            val = str(row['Metric_1'])
-            if pd.notna(row['Metric_2']) and str(row['Metric_2']).strip():
-                val += f" | {row['Metric_2']}"
-            return val
+        display_cols = {
+            "Tool": "Tooling ID", "Part": "Part ID (Part Name)", 
+            "OEM Division": "OEM Business Division", "Supplier": "Supplier", 
+            "Plant": "Plant", "Tooling Type": "Tooling Type"
+        }
+        
+        if a_type_label == "Cycle Time Deviations":
+            display_cols["Metric_1"] = "% of Deviation"
+        elif a_type_label == "Low Run Rate Shot Efficiency":
+            display_cols["Metric_1"] = "Run Rate Shot Efficiency"
+        elif a_type_label == "Low Run Rate Time Stability":
+            display_cols["Metric_1"] = "Run Rate Time Stability"
+        elif a_type_label in ["Loss vs. Optimal Capacity", "Loss vs. Target Capacity"]:
+            display_cols["Metric_1"] = "% of Loss"
+        elif a_type_label == "Tooling End of Life":
+            display_cols["Metric_1"] = "Utilization Rate"
+
+        display_cols["Date/Time"] = "Date & Time" 
+
+        out_df = level_df.sort_values(by='Risk Score', ascending=False)[list(display_cols.keys())].rename(columns=display_cols)
+        st.dataframe(out_df, hide_index=True, use_container_width=True)
+
+    @st.dialog("Top Tool Details", width="large")
+    def top_tool_popup(tool_id, subset):
+        supplier = subset['Supplier'].iloc[0] if not subset.empty else "N/A"
+        plant = subset['Plant'].iloc[0] if not subset.empty else "N/A"
+        st.markdown(f"### {tool_id}")
+        st.markdown(f"**Supplier:** {supplier} | **Plant:** {plant}")
+        disp = subset.sort_values('Risk Score', ascending=False)[['Alert Type', 'Severity', 'Frequency', 'Date/Time']].rename(columns={'Severity': 'Level'})
+        st.dataframe(disp, hide_index=True, use_container_width=True)
+
+    @st.dialog("Top Plant Details", width="large")
+    def top_plant_popup(plant, subset):
+        suppliers = ", ".join(subset['Supplier'].unique())
+        st.markdown(f"### {plant}")
+        st.markdown(f"**Supplier(s):** {suppliers}")
+        disp = subset.sort_values('Risk Score', ascending=False)[['Tool', 'Alert Type', 'Severity', 'Frequency', 'Date/Time']].rename(columns={'Tool':'Tooling ID', 'Severity': 'Level'})
+        st.dataframe(disp, hide_index=True, use_container_width=True)
+
+    @st.dialog("Top Supplier Details", width="large")
+    def top_supplier_popup(supplier, subset):
+        plants = ", ".join(subset['Plant'].unique())
+        st.markdown(f"### {supplier}")
+        st.markdown(f"**Plant(s):** {plants}")
+        disp = subset.sort_values('Risk Score', ascending=False)[['Tool', 'Alert Type', 'Severity', 'Frequency', 'Date/Time']].rename(columns={'Tool':'Tooling ID', 'Severity': 'Level'})
+        st.dataframe(disp, hide_index=True, use_container_width=True)
+
+    # ---------------------------------------------------------
+    # FALLBACK BUTTONS FOR OLDER STREAMLIT VERSIONS
+    # ---------------------------------------------------------
+    def render_breakdown_actions(label, df_subset, levels, is_status=False):
+        btn_cols = st.columns(len(levels))
+        for i, lvl in enumerate(levels):
+            if btn_cols[i].button(f"View {lvl}", key=f"btn_{label}_{lvl}", use_container_width=True):
+                if is_status:
+                    lvl_df = df_subset[df_subset['Alert Type'].str.contains(lvl)]
+                else:
+                    lvl_df = df_subset[df_subset['Severity'] == lvl]
+                category_popup(label, lvl, lvl_df)
+
+    def render_interactive_bar(df_subset, label):
+        categories = ['Level 1', 'Level 2', 'Level 3']
+        counts = df_subset['Severity'].value_counts() if not df_subset.empty else pd.Series(dtype=int)
+        data = pd.DataFrame({
+            'Level': categories,
+            'Count': [counts.get(cat, 0) for cat in categories],
+            'Color': [sev_colors.get(cat, '#3B82F6') for cat in categories]
+        })
+        selection = alt.selection_point(fields=['Level'], name='select')
+        chart = alt.Chart(data).mark_bar().encode(
+            x=alt.X('Level:N', sort=categories, axis=alt.Axis(labelAngle=0, title=None)),
+            y=alt.Y('Count:Q', title='Tool Count'),
+            color=alt.Color('Color:N', scale=None, legend=None),
+            opacity=alt.condition(selection, alt.value(1), alt.value(0.7)),
+            tooltip=['Level', 'Count']
+        ).add_params(selection).properties(height=250)
+        
+        try:
+            event = st.altair_chart(chart, use_container_width=True, on_select="rerun")
+            if event and hasattr(event, 'selection') and 'select' in event.selection and event.selection['select']:
+                selected_level = event.selection['select'][0]['Level']
+                lvl_df = df_subset[df_subset['Severity'] == selected_level]
+                category_popup(label, selected_level, lvl_df)
+        except TypeError:
+            st.altair_chart(chart, use_container_width=True)
+            render_breakdown_actions(label, df_subset, categories)
+
+    def render_interactive_donut(df_subset, label, categories, color_map, is_status=False):
+        if is_status:
+            counts = df_subset['Alert Type'].apply(lambda x: x.replace("Operation Status (", "").replace(")", "")).value_counts()
+        else:
+            counts = df_subset['Severity'].value_counts()
+
+        data = pd.DataFrame({
+            'Category': categories,
+            'Count': [counts.get(cat, 0) for cat in categories]
+        })
+        data = data[data['Count'] > 0]
+        if data.empty:
+            st.info("No Active Alerts")
+            return
+
+        domain = categories
+        range_colors = [color_map.get(cat, '#3B82F6') for cat in categories]
+        selection = alt.selection_point(fields=['Category'], name='select')
+        
+        chart = alt.Chart(data).mark_arc(innerRadius=50).encode(
+            theta=alt.Theta(field="Count", type="quantitative"),
+            color=alt.Color(field="Category", type="nominal", scale=alt.Scale(domain=domain, range=range_colors), legend=alt.Legend(title=None)),
+            tooltip=['Category', 'Count'],
+            opacity=alt.condition(selection, alt.value(1), alt.value(0.7))
+        ).add_params(selection).properties(height=250)
+
+        try:
+            event = st.altair_chart(chart, use_container_width=True, on_select="rerun")
+            if event and hasattr(event, 'selection') and 'select' in event.selection and event.selection['select']:
+                selected_cat = event.selection['select'][0]['Category']
+                if is_status:
+                    lvl_df = df_subset[df_subset['Alert Type'].str.contains(selected_cat)]
+                else:
+                    lvl_df = df_subset[df_subset['Severity'] == selected_cat]
+                category_popup(label, selected_cat, lvl_df)
+        except TypeError:
+            st.altair_chart(chart, use_container_width=True)
+            render_breakdown_actions(label, df_subset, categories, is_status=is_status)
+
+    # 6 Main Tabs for the Client Portal
+    cat_tabs = st.tabs([
+        "Overview Dashboard",
+        "Cycle Time", 
+        "Run Rate", 
+        "Capacity Risk", 
+        "Tooling End of Life", 
+        "Operation Status"
+    ])
+
+    with cat_tabs[0]: # Dashboard Overview
+
+        kpi1, kpi2, kpi3, kpi4 = st.columns(4)
+        kpi1.markdown(f"<div class='metric-card'><div class='metric-title'>Total Active Alerts</div><div class='metric-value'>{len(df)}</div></div>", unsafe_allow_html=True)
+        kpi2.markdown(f"<div class='metric-card'><div class='metric-title'>Impacted Tools</div><div class='metric-value'>{df['Tool'].nunique()}</div></div>", unsafe_allow_html=True)
+        kpi3.markdown(f"<div class='metric-card'><div class='metric-title'>Impacted Plants</div><div class='metric-value'>{df['Plant'].nunique()}</div></div>", unsafe_allow_html=True)
+        kpi4.markdown(f"<div class='metric-card'><div class='metric-title'>Impacted Suppliers</div><div class='metric-value'>{df['Supplier'].nunique()}</div></div>", unsafe_allow_html=True)
+
+        st.divider()
+
+        st.markdown("### Act Now: Critical Priorities")
+        st.write("Tools with the highest number of Level 2 and above (high risk) alerts.")
+        
+        high_risk_df = df[df['Severity'].isin(['Level 2', 'Level 3'])]
+        if high_risk_df.empty:
+            st.success("No high-risk alerts currently active.")
+        else:
+            top_tools = high_risk_df.groupby(['Tool', 'Plant', 'Supplier']).size().reset_index(name='Alert Count')
+            top_tools = top_tools.sort_values(by='Alert Count', ascending=False).head(3)
             
-        def render_alert_hierarchy(tab_df, tab_name):
-            if tab_df.empty:
-                st.info("No alerts found for this category with the current filters.")
-                return
+            cols = st.columns(3)
+            for idx, (_, tool_data) in enumerate(top_tools.iterrows()):
+                tool_alerts = high_risk_df[high_risk_df['Tool'] == tool_data['Tool']]
+                with cols[idx]:
+                    st.markdown(f"""
+                    <div class="action-card action-card-warning" style="margin-bottom: 0px;">
+                        <div class="risk-score-badge risk-score-warning">High Risk Alerts: {len(tool_alerts)}</div>
+                        <div class="card-tool">{tool_data['Tool']}</div>
+                        <div class="card-context">Plant: {tool_data['Plant']} <br/> Supplier: {tool_data['Supplier']}</div>
+                    </div>
+                    """, unsafe_allow_html=True)
+                    if st.button("Click to View Details", key=f"act_now_btn_{idx}", use_container_width=True):
+                        act_now_popup(tool_data['Tool'], tool_alerts)
+        
+        st.divider()
+
+        st.markdown("### Alert Distribution Breakdowns")
+        st.write("Detailed threshold analysis across the 6 major alert logic categories.")
+        
+        c1, c2 = st.columns(2)
+        with c1:
+            st.markdown("##### Cycle Time Deviations")
+            ct_df = df[df['Alert Type'] == 'Cycle Time']
+            render_interactive_bar(ct_df, "Cycle Time Deviations")
+            with st.expander("Definitions & Thresholds"):
+                st.markdown("- **Level 1:** > 0% and ≤ 5% deviation\n- **Level 2:** > 5% and ≤ 15% deviation\n- **Level 3:** > 15% deviation")
             
-            available_freqs = sorted(tab_df['Frequency'].unique().tolist())
-            selected_freqs = st.multiselect("Filter by Alert Frequency", options=available_freqs, default=available_freqs, key=f"freq_filter_{tab_name}")
-            filtered_df = tab_df[tab_df['Frequency'].isin(selected_freqs)].copy()
-            if filtered_df.empty:
-                st.info("No alerts match the selected frequency.")
-                return
-                
-            base_cols = {"Tool": "Tooling ID", "Part": "Part ID (Part Name)", "OEM Division": "OEM Business Division", "Supplier": "Supplier", "Plant": "Plant", "Tooling Type": "Tooling Type", "Severity": "Severity"}
-            for sev in sorted(filtered_df['Severity'].unique(), reverse=True):
-                st.markdown(f"#### 📌 {sev}")
-                sev_df = filtered_df[filtered_df['Severity'] == sev]
-                
-                for a_type in sorted(sev_df['Alert Type'].unique()):
-                    type_df = sev_df[sev_df['Alert Type'] == a_type].copy()
-                    display_cols = base_cols.copy()
-                    
-                    if a_type == "Cycle Time": display_cols["Metric_1"] = "% of deviation"
-                    elif a_type == "Low Run Rate - Shot Efficiency": display_cols["Metric_1"] = "Run Rate Shot Efficiency"
-                    elif a_type == "Low Run Rate - Time Stability": display_cols["Metric_1"] = "Run Rate Time Stability"
-                    elif "Capacity Risk" in a_type: display_cols["Metric_1"] = "% of loss"
-                    elif a_type == "Tooling EOL (Utilization)": display_cols["Metric_1"] = "Utilization Rate"
-                    elif a_type == "Tooling EOL (Remaining Days)": display_cols["Metric_1"] = "Remaining Life (Days)"
-                    elif a_type == "Tooling EOL (Combination)":
-                        display_cols["Metric_1"] = "Utilization Rate (%)"
-                        display_cols["Metric_2"] = "Remaining Life (days)"
-                    elif a_type == "Operation Status (Tool Producing)": display_cols["Metric_1"] = "Date & Time"
-                    elif a_type == "Operation Status (Tool Stops)": display_cols["Metric_1"] = "Tool Stops"
-                    else:
-                        status_val = a_type.replace("Operation Status (", "").replace(")", "")
-                        type_df["Tooling Status"] = status_val
-                        display_cols["Tooling Status"] = "Tooling Status"
-                        display_cols["Metric_1"] = "Date & Time"
-                    
-                    out_df = type_df[list(display_cols.keys())].rename(columns=display_cols)
-                    if len(sev_df['Alert Type'].unique()) > 1: st.markdown(f"##### {a_type}")
-                    st.dataframe(out_df, use_container_width=True, hide_index=True)
-                st.write("")
+            st.markdown("##### Low Run Rate Time Stability")
+            rr_stab_df = df[df['Alert Type'] == 'Low Run Rate - Time Stability']
+            render_interactive_bar(rr_stab_df, "Low Run Rate Time Stability")
+            with st.expander("Definitions & Thresholds"):
+                st.markdown("- **Level 1:** 75% ≤ rate < 85%\n- **Level 2:** 60% ≤ rate < 75%\n- **Level 3:** < 60%")
 
-        # Helper Maps
-        sev_colors = {'Level 1': '#FACC15', 'Level 2': '#F59E0B', 'Level 3': '#EF4444', 'Event': '#8B5CF6', 'Status': '#64748B'}
-        status_colors = {'Sensor Offline': '#F87171', 'Sensor Detached': '#FACC15', 'Inactive': '#94A3B8'}
+            st.markdown("##### Loss vs. Target Capacity")
+            cr_tgt_df = df[df['Alert Type'] == 'Capacity Risk (Target)']
+            render_interactive_bar(cr_tgt_df, "Loss vs. Target Capacity")
+            with st.expander("Definitions & Thresholds"):
+                st.markdown("- **Level 1:** > 0% and ≤ 5% loss\n- **Level 2:** > 5% and ≤ 10% loss\n- **Level 3:** > 10% loss")
 
-        @st.dialog("High Risk Alerts", width="large")
-        def act_now_popup(tool_name, tool_alerts_df):
-            st.markdown(f"**Target Tool:** {tool_name}")
-            sorted_df = tool_alerts_df.sort_values(by='Risk Score', ascending=False)
-            disp = sorted_df[['Alert Type', 'Severity', 'Frequency', 'Date/Time']].rename(columns={'Severity': 'Level'})
-            st.dataframe(disp, hide_index=True, use_container_width=True)
+            st.markdown("##### Operation Status")
+            os_target_cats = ['Sensor Offline', 'Sensor Detached', 'Inactive']
+            os_df = df[df['Alert Type'].apply(lambda x: any(cat in x for cat in os_target_cats))]
+            render_interactive_donut(os_df, "Operation Status", os_target_cats, status_colors, is_status=True)
+            with st.expander("Definitions & Categories"):
+                st.markdown("- **Sensor Offline:** Sensor heartbeat lost.\n- **Sensor Detached:** Physical detachment detected.\n- **Inactive:** Tool idle beyond threshold.")
 
-        @st.dialog("Alert Details", width="large")
-        def category_popup(a_type_label, level, level_df):
-            st.markdown(f"**{a_type_label} - {level}**")
-            if level_df.empty:
-                st.info("No alerts found for this selection.")
-                return
-            level_df = level_df.copy()
-            level_df['Exact calculation/value'] = level_df.apply(format_trigger_value, axis=1)
-            
-            display_cols = {
-                "Tool": "Tooling ID", "Part": "Part ID (Part Name)", 
-                "OEM Division": "OEM Business Division", "Supplier": "Supplier", 
-                "Plant": "Plant", "Tooling Type": "Tooling Type"
-            }
-            
-            # Dynamic Column Mapping
-            if a_type_label == "Cycle Time Deviations":
-                display_cols["Metric_1"] = "% of Deviation"
-            elif a_type_label == "Low Run Rate Shot Efficiency":
-                display_cols["Metric_1"] = "Run Rate Shot Efficiency"
-            elif a_type_label == "Low Run Rate Time Stability":
-                display_cols["Metric_1"] = "Run Rate Time Stability"
-            elif a_type_label in ["Loss vs. Optimal Capacity", "Loss vs. Target Capacity"]:
-                display_cols["Metric_1"] = "% of Loss"
-            elif a_type_label == "Tooling End of Life":
-                display_cols["Metric_1"] = "Utilization Rate"
-            elif a_type_label == "Operation Status":
-                pass 
+        with c2:
+            st.markdown("##### Low Run Rate Shot Efficiency")
+            rr_eff_df = df[df['Alert Type'] == 'Low Run Rate - Shot Efficiency']
+            render_interactive_bar(rr_eff_df, "Low Run Rate Shot Efficiency")
+            with st.expander("Definitions & Thresholds"):
+                st.markdown("- **Level 1:** 75% ≤ rate < 85%\n- **Level 2:** 60% ≤ rate < 75%\n- **Level 3:** < 60%")
 
-            display_cols["Date/Time"] = "Date & Time" 
+            st.markdown("##### Loss vs. Optimal Capacity")
+            cr_opt_df = df[df['Alert Type'] == 'Capacity Risk (Optimal)']
+            render_interactive_bar(cr_opt_df, "Loss vs. Optimal Capacity")
+            with st.expander("Definitions & Thresholds"):
+                st.markdown("- **Level 1:** > 0% and ≤ 5% loss\n- **Level 2:** > 5% and ≤ 10% loss\n- **Level 3:** > 10% loss")
 
-            out_df = level_df.sort_values(by='Risk Score', ascending=False)[list(display_cols.keys())].rename(columns=display_cols)
-            st.dataframe(out_df, hide_index=True, use_container_width=True)
-
-        def render_breakdown_actions(label, df_subset, levels, is_status=False):
-            btn_cols = st.columns(len(levels))
-            for i, lvl in enumerate(levels):
-                if btn_cols[i].button(f"View {lvl}", key=f"btn_{label}_{lvl}", use_container_width=True):
-                    if is_status:
-                        lvl_df = df_subset[df_subset['Alert Type'].str.contains(lvl)]
-                    else:
-                        lvl_df = df_subset[df_subset['Severity'] == lvl]
-                    category_popup(label, lvl, lvl_df)
-
-        def render_interactive_bar(df_subset, label):
+            st.markdown("##### Tooling End of Life")
+            eol_df = df[df['Alert Type'].str.contains('EOL')]
             categories = ['Level 1', 'Level 2', 'Level 3']
-            counts = df_subset['Severity'].value_counts() if not df_subset.empty else pd.Series(dtype=int)
-            data = pd.DataFrame({
-                'Level': categories,
-                'Count': [counts.get(cat, 0) for cat in categories],
-                'Color': [sev_colors.get(cat, '#3B82F6') for cat in categories]
-            })
-            selection = alt.selection_point(fields=['Level'], name='select')
-            chart = alt.Chart(data).mark_bar().encode(
-                x=alt.X('Level:N', sort=categories, axis=alt.Axis(labelAngle=0, title=None)),
-                y=alt.Y('Count:Q', title='Tool Count'),
-                color=alt.Color('Color:N', scale=None, legend=None),
-                opacity=alt.condition(selection, alt.value(1), alt.value(0.7)),
-                tooltip=['Level', 'Count']
-            ).add_params(selection).properties(height=250)
-            
-            try:
-                event = st.altair_chart(chart, use_container_width=True, on_select="rerun")
-                if event and hasattr(event, 'selection') and 'select' in event.selection and event.selection['select']:
-                    selected_level = event.selection['select'][0]['Level']
-                    lvl_df = df_subset[df_subset['Severity'] == selected_level]
-                    category_popup(label, selected_level, lvl_df)
-            except TypeError:
-                st.altair_chart(chart, use_container_width=True)
-                render_breakdown_actions(label, df_subset, categories)
+            render_interactive_donut(eol_df, "Tooling End of Life", categories, sev_colors)
+            with st.expander("Definitions & Thresholds"):
+                st.markdown("- **Level 1:** Utilization 70%-80% OR Remaining ≤ 45 days\n- **Level 2:** Utilization 80%-90% OR Remaining ≤ 30 days\n- **Level 3:** Utilization > 90% OR Remaining ≤ 10 days")
 
-        def render_interactive_donut(df_subset, label, categories, color_map, is_status=False):
-            if is_status:
-                counts = df_subset['Alert Type'].apply(lambda x: x.replace("Operation Status (", "").replace(")", "")).value_counts()
-            else:
-                counts = df_subset['Severity'].value_counts()
-
-            data = pd.DataFrame({
-                'Category': categories,
-                'Count': [counts.get(cat, 0) for cat in categories]
-            })
-            data = data[data['Count'] > 0]
-            if data.empty:
-                st.info("No Active Alerts")
-                return
-
-            domain = categories
-            range_colors = [color_map.get(cat, '#3B82F6') for cat in categories]
-            selection = alt.selection_point(fields=['Category'], name='select')
-            
-            chart = alt.Chart(data).mark_arc(innerRadius=50).encode(
-                theta=alt.Theta(field="Count", type="quantitative"),
-                color=alt.Color(field="Category", type="nominal", scale=alt.Scale(domain=domain, range=range_colors), legend=alt.Legend(title=None)),
-                tooltip=['Category', 'Count'],
-                opacity=alt.condition(selection, alt.value(1), alt.value(0.7))
-            ).add_params(selection).properties(height=250)
-
-            try:
-                event = st.altair_chart(chart, use_container_width=True, on_select="rerun")
-                if event and hasattr(event, 'selection') and 'select' in event.selection and event.selection['select']:
-                    selected_cat = event.selection['select'][0]['Category']
-                    if is_status:
-                        lvl_df = df_subset[df_subset['Alert Type'].str.contains(selected_cat)]
-                    else:
-                        lvl_df = df_subset[df_subset['Severity'] == selected_cat]
-                    category_popup(label, selected_cat, lvl_df)
-            except TypeError:
-                st.altair_chart(chart, use_container_width=True)
-                render_breakdown_actions(label, df_subset, categories, is_status=is_status)
-
-        # 6 Main Tabs for the Client Portal
-        cat_tabs = st.tabs([
-            "Overview Dashboard",
-            "Cycle Time", 
-            "Run Rate", 
-            "Capacity Risk", 
-            "Tooling End of Life", 
-            "Operation Status"
-        ])
-
-        with cat_tabs[0]: # Dashboard Overview
-
-            # --- 1. Core KPIs ---
-            kpi1, kpi2, kpi3, kpi4 = st.columns(4)
-            kpi1.markdown(f"<div class='metric-card'><div class='metric-title'>Total Active Alerts</div><div class='metric-value'>{len(df)}</div></div>", unsafe_allow_html=True)
-            kpi2.markdown(f"<div class='metric-card'><div class='metric-title'>Impacted Tools</div><div class='metric-value'>{df['Tool'].nunique()}</div></div>", unsafe_allow_html=True)
-            kpi3.markdown(f"<div class='metric-card'><div class='metric-title'>Impacted Plants</div><div class='metric-value'>{df['Plant'].nunique()}</div></div>", unsafe_allow_html=True)
-            kpi4.markdown(f"<div class='metric-card'><div class='metric-title'>Impacted Suppliers</div><div class='metric-value'>{df['Supplier'].nunique()}</div></div>", unsafe_allow_html=True)
-
-            st.divider()
-
-            # --- 2. ACT NOW: Triage Banner ---
-            st.markdown("### Act Now: Critical Priorities")
-            st.write("Tools with the highest number of Level 2 and above (high risk) alerts.")
-            
-            high_risk_df = df[df['Severity'].isin(['Level 2', 'Level 3'])]
-            if high_risk_df.empty:
-                st.success("No high-risk alerts currently active.")
-            else:
-                top_tools = high_risk_df.groupby(['Tool', 'Plant', 'Supplier']).size().reset_index(name='Alert Count')
-                top_tools = top_tools.sort_values(by='Alert Count', ascending=False).head(3)
-                
-                cols = st.columns(3)
-                for idx, (_, tool_data) in enumerate(top_tools.iterrows()):
-                    tool_alerts = high_risk_df[high_risk_df['Tool'] == tool_data['Tool']]
-                    with cols[idx]:
-                        st.markdown(f"""
-                        <div class="action-card action-card-warning">
-                            <div class="risk-score-badge risk-score-warning">High Risk Alerts: {len(tool_alerts)}</div>
-                            <div class="card-tool">{tool_data['Tool']}</div>
-                            <div class="card-context">Plant: {tool_data['Plant']} <br/> Supplier: {tool_data['Supplier']}</div>
-                        </div>
-                        """, unsafe_allow_html=True)
-                        
-                        if st.button("📊 View Alerts", key=f"view_tool_{idx}", use_container_width=True):
-                            act_now_popup(tool_data['Tool'], tool_alerts)
-            
-            st.divider()
-
-            # --- 3. Alert Distribution Breakdowns ---
-            st.markdown("### Alert Distribution Breakdowns")
-            st.write("Detailed threshold analysis across the 6 major alert logic categories.")
-            
-            c1, c2 = st.columns(2)
-            with c1:
-                st.markdown("##### Cycle Time Deviations")
-                ct_df = df[df['Alert Type'] == 'Cycle Time']
-                render_interactive_bar(ct_df, "Cycle Time Deviations")
-                with st.expander("Definitions & Thresholds"):
-                    st.markdown("- **Level 1:** > 0% and ≤ 5% deviation\n- **Level 2:** > 5% and ≤ 15% deviation\n- **Level 3:** > 15% deviation")
-                
-                st.markdown("##### Low Run Rate Time Stability")
-                rr_stab_df = df[df['Alert Type'] == 'Low Run Rate - Time Stability']
-                render_interactive_bar(rr_stab_df, "Low Run Rate Time Stability")
-                with st.expander("Definitions & Thresholds"):
-                    st.markdown("- **Level 1:** 75% ≤ rate < 85%\n- **Level 2:** 60% ≤ rate < 75%\n- **Level 3:** < 60%")
-
-                st.markdown("##### Loss vs. Target Capacity")
-                cr_tgt_df = df[df['Alert Type'] == 'Capacity Risk (Target)']
-                render_interactive_bar(cr_tgt_df, "Loss vs. Target Capacity")
-                with st.expander("Definitions & Thresholds"):
-                    st.markdown("- **Level 1:** > 0% and ≤ 5% loss\n- **Level 2:** > 5% and ≤ 10% loss\n- **Level 3:** > 10% loss")
-
-                st.markdown("##### Operation Status")
-                os_target_cats = ['Sensor Offline', 'Sensor Detached', 'Inactive']
-                os_df = df[df['Alert Type'].apply(lambda x: any(cat in x for cat in os_target_cats))]
-                render_interactive_donut(os_df, "Operation Status", os_target_cats, status_colors, is_status=True)
-                with st.expander("Definitions & Categories"):
-                    st.markdown("- **Sensor Offline:** Sensor heartbeat lost.\n- **Sensor Detached:** Physical detachment detected.\n- **Inactive:** Tool idle beyond threshold.")
-
-            with c2:
-                st.markdown("##### Low Run Rate Shot Efficiency")
-                rr_eff_df = df[df['Alert Type'] == 'Low Run Rate - Shot Efficiency']
-                render_interactive_bar(rr_eff_df, "Low Run Rate Shot Efficiency")
-                with st.expander("Definitions & Thresholds"):
-                    st.markdown("- **Level 1:** 75% ≤ rate < 85%\n- **Level 2:** 60% ≤ rate < 75%\n- **Level 3:** < 60%")
-
-                st.markdown("##### Loss vs. Optimal Capacity")
-                cr_opt_df = df[df['Alert Type'] == 'Capacity Risk (Optimal)']
-                render_interactive_bar(cr_opt_df, "Loss vs. Optimal Capacity")
-                with st.expander("Definitions & Thresholds"):
-                    st.markdown("- **Level 1:** > 0% and ≤ 5% loss\n- **Level 2:** > 5% and ≤ 10% loss\n- **Level 3:** > 10% loss")
-
-                st.markdown("##### Tooling End of Life")
-                eol_df = df[df['Alert Type'].str.contains('EOL')]
-                categories = ['Level 1', 'Level 2', 'Level 3']
-                render_interactive_donut(eol_df, "Tooling End of Life", categories, sev_colors)
-                with st.expander("Definitions & Thresholds"):
-                    st.markdown("- **Level 1:** Utilization 70%-80% OR Remaining ≤ 45 days\n- **Level 2:** Utilization 80%-90% OR Remaining ≤ 30 days\n- **Level 3:** Utilization > 90% OR Remaining ≤ 10 days")
-
-            st.divider()
-
-            # --- 4. Top Impacted Entities ---
-            st.markdown("### Top Impacted Entities")
-            t1, t2, t3 = st.columns(3)
-            with t1:
-                st.markdown("**Top Tools**")
-                st.dataframe(df['Tool'].value_counts().head(5).reset_index().rename(columns={'count':'Alerts', 'Tool':'Tooling ID'}), use_container_width=True, hide_index=True)
-            with t2:
-                st.markdown("**Top Plants**")
-                st.dataframe(df['Plant'].value_counts().head(5).reset_index().rename(columns={'count':'Alerts', 'Plant':'Plant Name'}), use_container_width=True, hide_index=True)
-            with t3:
-                st.markdown("**Top Suppliers**")
-                st.dataframe(df['Supplier'].value_counts().head(5).reset_index().rename(columns={'count':'Alerts', 'Supplier':'Supplier Name'}), use_container_width=True, hide_index=True)
-
-        with cat_tabs[1]: # Cycle Time
-            render_alert_hierarchy(df[df['Alert Type'] == 'Cycle Time'], "Cycle Time")
-            
-        with cat_tabs[2]: # Run Rate
-            st.markdown("### Run Rate Shot Efficiency")
-            render_alert_hierarchy(df[df['Alert Type'] == 'Low Run Rate - Shot Efficiency'], "Run Rate Shot Efficiency")
-            st.divider()
-            st.markdown("### Run Rate Time Stability")
-            render_alert_hierarchy(df[df['Alert Type'] == 'Low Run Rate - Time Stability'], "Run Rate Time Stability")
-            
-        with cat_tabs[3]: # Capacity Risk
-            st.markdown("### Loss Parts vs Optimal Capacity")
-            render_alert_hierarchy(df[df['Alert Type'] == 'Capacity Risk (Optimal)'], "Optimal Capacity")
-            st.divider()
-            st.markdown("### Loss Parts vs Target Capacity")
-            render_alert_hierarchy(df[df['Alert Type'] == 'Capacity Risk (Target)'], "Target Capacity")
-            
-        with cat_tabs[4]: # Tooling EOL
-            render_alert_hierarchy(df[df['Alert Type'].str.contains('EOL')], "EOL")
-            
-        with cat_tabs[5]: # Operation Status
-            render_alert_hierarchy(df[df['Alert Type'].str.contains('Operation Status')], "Operation Status")
-        
-        st.divider()
-        st.markdown("#### 📄 Drill-down into Alert Details")
-        st.write("Select an Alert to view its dedicated detail page with exact triggering calculations.")
-        
-        select_col, btn_col, empty_col = st.columns([3, 1, 6])
-        with select_col:
-            alert_mapping = dict(zip(df['Alert ID'], df['Alert Name']))
-            selected_id = st.selectbox("Select Alert", options=list(alert_mapping.keys()), format_func=lambda x: alert_mapping[x], label_visibility="collapsed")
-        with btn_col:
-            if st.button("View Details", type="primary", use_container_width=True):
-                set_view("detail", selected_id)
-                st.rerun()
-
-    # ---------------------------------------------------------
-    # INDIVIDUAL ALERT DETAIL PAGE
-    # ---------------------------------------------------------
-    elif st.session_state.client_portal_view == "detail":
-        if st.button("🔙 Back to Alerts Dashboard"):
-            set_view("list")
-            st.rerun()
-            
-        alert_data = st.session_state.client_alerts_db[st.session_state.client_alerts_db['Alert ID'] == st.session_state.selected_alert_id].iloc[0]
-        
-        st.write("")
-        st.markdown(f"<h2>{alert_data['Alert Name']}</h2>", unsafe_allow_html=True)
-        
-        sev = alert_data['Severity']
-        color = "#EF4444" if "Level 3" in sev else "#F59E0B" if "Level 2" in sev else "#FACC15" if "Level 1" in sev else "#3B82F6"
-        st.markdown(f"<div style='background-color: {color}; color: white; padding: 4px 12px; border-radius: 20px; display: inline-block; font-weight: bold; font-size: 0.9rem; margin-bottom: 20px;'>Severity: {sev}</div>", unsafe_allow_html=True)
-        
-        c1, c2, c3, c4 = st.columns(4)
-        with c1: st.markdown(f"<div class='metric-card'><div class='metric-title'>Date & Time</div><div style='font-size: 1.2rem; font-weight: bold;'>{alert_data['Date/Time']}</div></div>", unsafe_allow_html=True)
-        with c2: st.markdown(f"<div class='metric-card'><div class='metric-title'>Frequency</div><div style='font-size: 1.2rem; font-weight: bold;'>{alert_data['Frequency']}</div></div>", unsafe_allow_html=True)
-        with c3: st.markdown(f"<div class='metric-card'><div class='metric-title'>Tooling Type</div><div style='font-size: 1.2rem; font-weight: bold;'>{alert_data['Tooling Type']}</div></div>", unsafe_allow_html=True)
-        with c4: st.markdown(f"<div class='metric-card'><div class='metric-title'>OEM Division</div><div style='font-size: 1.2rem; font-weight: bold;'>{alert_data['OEM Division']}</div></div>", unsafe_allow_html=True)
-
-        st.markdown("#### 🏭 Entity Details")
-        e1, e2, e3, e4 = st.columns(4)
-        e1.metric("Target Tool", alert_data['Tool'])
-        e2.metric("Associated Part", alert_data['Part'])
-        e3.metric("Plant Location", alert_data['Plant'])
-        e4.metric("Supplier", alert_data['Supplier'])
-        
         st.divider()
 
-        st.markdown(f"#### 📊 Trigger Analytics: {alert_data['Alert Type']}")
+        # --- 4. Top Impacted Entities ---
+        st.markdown("### Top Impacted Entities")
+        t1, t2, t3 = st.columns(3)
+        with t1:
+            st.markdown("**Top Tools**")
+            top_tools = df['Tool'].value_counts().head(5).reset_index()
+            top_tools.columns = ['Tool', 'Alerts']
+            c1, c2 = st.columns([3, 1])
+            c1.caption("Tooling ID")
+            c2.caption("Alerts")
+            for _, row in top_tools.iterrows():
+                c1, c2 = st.columns([3, 1])
+                c1.write(row['Tool'])
+                if c2.button(str(row['Alerts']), key=f"btn_top_tool_{row['Tool']}", use_container_width=True):
+                    top_tool_popup(row['Tool'], df[df['Tool'] == row['Tool']])
+        with t2:
+            st.markdown("**Top Plants**")
+            top_plants = df['Plant'].value_counts().head(5).reset_index()
+            top_plants.columns = ['Plant', 'Alerts']
+            c1, c2 = st.columns([3, 1])
+            c1.caption("Plant Name")
+            c2.caption("Alerts")
+            for _, row in top_plants.iterrows():
+                c1, c2 = st.columns([3, 1])
+                c1.write(row['Plant'])
+                if c2.button(str(row['Alerts']), key=f"btn_top_plant_{row['Plant']}", use_container_width=True):
+                    top_plant_popup(row['Plant'], df[df['Plant'] == row['Plant']])
+        with t3:
+            st.markdown("**Top Suppliers**")
+            top_suppliers = df['Supplier'].value_counts().head(5).reset_index()
+            top_suppliers.columns = ['Supplier', 'Alerts']
+            c1, c2 = st.columns([3, 1])
+            c1.caption("Supplier Name")
+            c2.caption("Alerts")
+            for _, row in top_suppliers.iterrows():
+                c1, c2 = st.columns([3, 1])
+                c1.write(row['Supplier'])
+                if c2.button(str(row['Alerts']), key=f"btn_top_supplier_{row['Supplier']}", use_container_width=True):
+                    top_supplier_popup(row['Supplier'], df[df['Supplier'] == row['Supplier']])
+
+    with cat_tabs[1]: # Cycle Time
+        render_alert_hierarchy(df[df['Alert Type'] == 'Cycle Time'], "Cycle Time")
         
-        a_type = alert_data['Alert Type']
-        m1 = alert_data['Metric_1']
-        m2 = alert_data['Metric_2']
+    with cat_tabs[2]: # Run Rate
+        st.markdown("### Run Rate Shot Efficiency")
+        render_alert_hierarchy(df[df['Alert Type'] == 'Low Run Rate - Shot Efficiency'], "Run Rate Shot Efficiency")
+        st.divider()
+        st.markdown("### Run Rate Time Stability")
+        render_alert_hierarchy(df[df['Alert Type'] == 'Low Run Rate - Time Stability'], "Run Rate Time Stability")
         
-        if a_type == "Cycle Time":
-            st.info("The tool is operating significantly outside the approved cycle time parameters.")
-            st.markdown(f"<div class='metric-card'><div class='metric-title'>% Deviation vs Approved Cycle Time</div><div class='metric-value' style='color: #EF4444;'>{m1}</div></div>", unsafe_allow_html=True)
-        elif a_type == "Low Run Rate - Shot Efficiency":
-            st.info("The tool is failing to achieve the expected output efficiency during scheduled operation hours.")
-            st.markdown(f"<div class='metric-card'><div class='metric-title'>Current Run Rate Shot Efficiency</div><div class='metric-value' style='color: #F59E0B;'>{m1}</div></div>", unsafe_allow_html=True)
-        elif a_type == "Low Run Rate - Time Stability":
-            st.info("The tool's cycle times are highly unstable, affecting production predictability.")
-            st.markdown(f"<div class='metric-card'><div class='metric-title'>Current Run Rate Time Stability</div><div class='metric-value' style='color: #F59E0B;'>{m1}</div></div>", unsafe_allow_html=True)
-        elif "Capacity Risk (Optimal)" in a_type:
-            st.info("Calculating lost parts specifically against the optimal maximum theoretical capacity.")
-            st.markdown(f"<div class='metric-card'><div class='metric-title'>% of Lost Parts Against Optimal Capacity</div><div class='metric-value' style='color: #EF4444;'>{m1}</div></div>", unsafe_allow_html=True)
-        elif "Capacity Risk (Target)" in a_type:
-            st.info("Calculating lost parts against your predefined targeted capacity baseline.")
-            st.markdown(f"<div class='metric-card'><div class='metric-title'>% of Lost Parts Against Target Capacity</div><div class='metric-value' style='color: #EF4444;'>{m1}</div></div>", unsafe_allow_html=True)
-        elif "EOL (Utilization)" in a_type:
-            st.warning("Tool is approaching its maximum forecasted physical shot limit.")
-            st.markdown(f"<div class='metric-card'><div class='metric-title'>Current Tool Life Used</div><div class='metric-value' style='color: #EF4444;'>{m1}</div></div>", unsafe_allow_html=True)
-        elif "EOL (Remaining Days)" in a_type:
-            st.warning("Tool life is severely depleted based on current running trajectory.")
-            st.markdown(f"<div class='metric-card'><div class='metric-title'>Estimated Remaining Tool Life</div><div class='metric-value' style='color: #EF4444;'>{m1}</div></div>", unsafe_allow_html=True)
-        elif "EOL (Combination)" in a_type:
-            st.warning("Tool requires maintenance or replacement. A combination threshold has been breached.")
-            cc1, cc2 = st.columns(2)
-            with cc1: st.markdown(f"<div class='metric-card'><div class='metric-title'>Current Tool Life Used</div><div class='metric-value' style='color: #EF4444;'>{m1}</div></div>", unsafe_allow_html=True)
-            with cc2: st.markdown(f"<div class='metric-card'><div class='metric-title'>Estimated Remaining Tool Life</div><div class='metric-value' style='color: #EF4444;'>{m2}</div></div>", unsafe_allow_html=True)
-        elif "Tool Producing" in a_type:
-            st.success("A new continuous production run interval was verified by the system.")
-            st.markdown(f"<div class='metric-card'><div class='metric-title'>Exact Start Timestamp</div><div class='metric-value' style='color: #10B981;'>{m1}</div></div>", unsafe_allow_html=True)
-        elif "Tool Stops" in a_type:
-            st.error("The tool was abruptly removed from the press based on TMD diagnostics.")
-            st.markdown(f"<div class='metric-card'><div class='metric-title'>Exact Stop Timestamp</div><div class='metric-value' style='color: #EF4444;'>{m1}</div></div>", unsafe_allow_html=True)
-        else: 
-            st.error("A critical connectivity or sensor status change was detected.")
-            st.markdown(f"<div class='metric-card'><div class='metric-title'>Status Change Timestamp</div><div class='metric-value' style='color: #EF4444;'>{m1}</div></div>", unsafe_allow_html=True)
+    with cat_tabs[3]: # Capacity Risk
+        st.markdown("### Loss Parts vs Optimal Capacity")
+        render_alert_hierarchy(df[df['Alert Type'] == 'Capacity Risk (Optimal)'], "Optimal Capacity")
+        st.divider()
+        st.markdown("### Loss Parts vs Target Capacity")
+        render_alert_hierarchy(df[df['Alert Type'] == 'Capacity Risk (Target)'], "Target Capacity")
+        
+    with cat_tabs[4]: # Tooling EOL
+        render_alert_hierarchy(df[df['Alert Type'].str.contains('EOL')], "EOL")
+        
+    with cat_tabs[5]: # Operation Status
+        render_alert_hierarchy(df[df['Alert Type'].str.contains('Operation Status')], "Operation Status")
