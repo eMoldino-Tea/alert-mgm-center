@@ -46,6 +46,8 @@ if 'client_alerts_db' not in st.session_state:
         {"Alert ID": "ALT-1009", "Alert Name": "Tool Producing Started", "Date/Time": "2026-04-27 07:30:00", "Frequency": "Real time", "Tool": "Tool_A", "Part": "Part 101", "Supplier": "Supplier X", "Plant": "Plant 1", "Tooling Type": "Injection", "OEM Division": "Div A", "Severity": "Event", "Alert Type": "Operation Status (Tool Producing)", "Metric_1": "2026-04-27 07:30:00", "Metric_2": ""},
         {"Alert ID": "ALT-1010", "Alert Name": "Tool Stopped Unexpectedly", "Date/Time": "2026-04-27 13:45:00", "Frequency": "Real time", "Tool": "Tool_B", "Part": "Part 102", "Supplier": "Supplier Y", "Plant": "Plant 2", "Tooling Type": "Stamping", "OEM Division": "Div B", "Severity": "Event", "Alert Type": "Operation Status (Tool Stops)", "Metric_1": "2026-04-27 13:45:00", "Metric_2": ""},
         {"Alert ID": "ALT-1011", "Alert Name": "Sensor Offline Alert", "Date/Time": "2026-04-26 22:10:00", "Frequency": "Real time", "Tool": "Tool_C", "Part": "Part 103", "Supplier": "Supplier X", "Plant": "Plant 1", "Tooling Type": "Die Casting", "OEM Division": "Div A", "Severity": "Status", "Alert Type": "Operation Status (Sensor Offline)", "Metric_1": "2026-04-26 22:10:00", "Metric_2": ""},
+        {"Alert ID": "ALT-1012", "Alert Name": "Sensor Detached Alert", "Date/Time": "2026-04-26 10:10:00", "Frequency": "Real time", "Tool": "Tool_C", "Part": "Part 103", "Supplier": "Supplier X", "Plant": "Plant 1", "Tooling Type": "Die Casting", "OEM Division": "Div A", "Severity": "Status", "Alert Type": "Operation Status (Sensor Detached)", "Metric_1": "2026-04-26 10:10:00", "Metric_2": ""},
+        {"Alert ID": "ALT-1013", "Alert Name": "Tool Inactive Alert", "Date/Time": "2026-04-25 08:10:00", "Frequency": "Real time", "Tool": "Tool_D", "Part": "Product Alpha", "Supplier": "Supplier Z", "Plant": "Plant 3", "Tooling Type": "Injection", "OEM Division": "Div C", "Severity": "Status", "Alert Type": "Operation Status (Inactive)", "Metric_1": "2026-04-25 08:10:00", "Metric_2": ""},
     ]
     st.session_state.client_alerts_db = pd.DataFrame(mock_data)
 
@@ -868,6 +870,45 @@ elif page == "Client Alerts Portal":
                     st.dataframe(out_df, use_container_width=True, hide_index=True)
                 st.write("")
 
+        # Helper functions for the custom graph-based dashboards
+        sev_colors = {'Level 1': '#f59e0b', 'Level 2': '#ef4444', 'Event': '#8b5cf6', 'Status': '#64748b'}
+        status_colors = {'Sensor Offline': '#f87171', 'Sensor Detached': '#facc15', 'Inactive': '#94a3b8'}
+
+        def render_matplot_bar(df_subset, title):
+            fig, ax = plt.subplots(figsize=(5, 3.5))
+            if df_subset.empty:
+                ax.text(0.5, 0.5, 'No Active Alerts', ha='center', va='center', color='#94a3b8')
+            else:
+                counts = df_subset['Severity'].value_counts().sort_index()
+                colors = [sev_colors.get(x, '#3b82f6') for x in counts.index]
+                bars = ax.bar(counts.index, counts.values, color=colors, width=0.5)
+                # Apply data labels directly onto the bars
+                for bar in bars:
+                    yval = bar.get_height()
+                    ax.text(bar.get_x() + bar.get_width()/2, yval + 0.1, int(yval), ha='center', va='bottom', fontsize=10, fontweight='bold')
+            
+            ax.set_title(title, fontsize=11, fontweight='bold', color='#1e40af', pad=10)
+            ax.set_ylabel("Tool Count", fontsize=9)
+            ax.spines['top'].set_visible(False)
+            ax.spines['right'].set_visible(False)
+            ax.spines['left'].set_color('#cbd5e1')
+            ax.spines['bottom'].set_color('#cbd5e1')
+            plt.tight_layout()
+            st.pyplot(fig)
+
+        def render_matplot_donut(counts_series, title, color_map):
+            fig, ax = plt.subplots(figsize=(4.5, 4.5))
+            if counts_series.empty:
+                ax.text(0.5, 0.5, 'No Active Alerts', ha='center', va='center', color='#94a3b8')
+            else:
+                colors = [color_map.get(x, '#3b82f6') for x in counts_series.index]
+                ax.pie(counts_series.values, labels=counts_series.index, autopct='%1.0f%%', startangle=90, colors=colors,
+                       wedgeprops=dict(width=0.4, edgecolor='white', linewidth=2), textprops={'fontsize': 10})
+            ax.set_title(title, fontsize=11, fontweight='bold', color='#1e40af', pad=10)
+            plt.tight_layout()
+            st.pyplot(fig)
+
+
         # Overview Dashboard and 5 Main Tabs
         cat_tabs = st.tabs([
             "Overview Dashboard",
@@ -890,93 +931,66 @@ elif page == "Client Alerts Portal":
             kpi4.markdown(f"<div class='metric-card'><div class='metric-title'>Impacted Suppliers</div><div class='metric-value'>{df['Supplier'].nunique()}</div></div>", unsafe_allow_html=True)
             kpi5.markdown(f"<div class='metric-card'><div class='metric-title'>OEM Divisions</div><div class='metric-value'>{df['OEM Division'].nunique()}</div></div>", unsafe_allow_html=True)
 
-            # --- 2. High-Level Distributions ---
-            st.markdown("#### 📈 High-Level Distributions")
-            v1, v2, v3 = st.columns(3)
-
-            with v1:
-                st.markdown("**By Severity**")
-                if not df.empty and MATPLOTLIB_AVAILABLE:
-                    fig, ax = plt.subplots(figsize=(3,3))
-                    sev_counts = df['Severity'].value_counts()
-                    # Custom colors to maintain consistency
-                    sev_colors = ['#ef4444' if '2' in str(x) else '#f59e0b' if '1' in str(x) else '#3b82f6' for x in sev_counts.index]
-                    ax.pie(sev_counts, labels=sev_counts.index, autopct='%1.0f%%', startangle=90,
-                           colors=sev_colors, wedgeprops=dict(width=0.4, edgecolor='white'))
-                    plt.tight_layout()
-                    st.pyplot(fig)
-                else:
-                    st.bar_chart(df['Severity'].value_counts())
-
-            with v2:
-                st.markdown("**By Alert Type**")
-                st.bar_chart(df['Alert Type'].value_counts())
-
-            with v3:
-                st.markdown("**By Frequency**")
-                st.bar_chart(df['Frequency'].value_counts())
-
             st.divider()
 
-            # --- 3. Alert Distribution Dashboards ---
+            # --- 2. Alert Distribution Dashboards (Graph-Based) ---
             st.markdown("#### 📊 Alert Distribution Dashboards")
             
             c1, c2 = st.columns(2)
             
             with c1:
-                st.markdown("**Cycle Time**")
+                st.markdown("##### Cycle Time")
                 ct_df = df[df['Alert Type'] == 'Cycle Time']
-                st.dataframe(pd.DataFrame([
-                    {"Level": "Level 1", "Definition (Deviation)": "> 0% and ≤ 5%", "Tool Count": len(ct_df[ct_df['Severity'] == 'Level 1'])},
-                    {"Level": "Level 2", "Definition (Deviation)": "> 5% and ≤ 15%", "Tool Count": len(ct_df[ct_df['Severity'] == 'Level 2'])}
-                ]), hide_index=True, use_container_width=True)
+                if MATPLOTLIB_AVAILABLE: 
+                    render_matplot_bar(ct_df, "Cycle Time Deviations")
+                with st.expander("Definitions & Thresholds"):
+                    st.markdown("- **Level 1:** > 0% and ≤ 5% deviation\n- **Level 2:** > 5% and ≤ 15% deviation")
                 
-                st.markdown("**Run Rate Efficiency**")
-                rr_eff_df = df[df['Alert Type'] == 'Low Run Rate - Shot Efficiency']
-                st.dataframe(pd.DataFrame([
-                    {"Level": "Level 1", "Definition (Efficiency)": "75% ≤ rate < 85%", "Tool Count": len(rr_eff_df[rr_eff_df['Severity'] == 'Level 1'])},
-                    {"Level": "Level 2", "Definition (Efficiency)": "60% ≤ rate < 75%", "Tool Count": len(rr_eff_df[rr_eff_df['Severity'] == 'Level 2'])}
-                ]), hide_index=True, use_container_width=True)
+                st.markdown("##### Run Rate Stability")
+                rr_stab_df = df[df['Alert Type'] == 'Low Run Rate - Time Stability']
+                if MATPLOTLIB_AVAILABLE: 
+                    render_matplot_bar(rr_stab_df, "Low Time Stability")
+                with st.expander("Definitions & Thresholds"):
+                    st.markdown("- **Level 1:** 75% ≤ rate < 85%\n- **Level 2:** 60% ≤ rate < 75%")
 
-                st.markdown("**Capacity Risk: Loss vs. Optimal Capacity**")
-                cr_opt_df = df[df['Alert Type'] == 'Capacity Risk (Optimal)']
-                st.dataframe(pd.DataFrame([
-                    {"Level": "Level 1", "Definition (Loss %)": "> 0% and ≤ 5%", "Tool Count": len(cr_opt_df[cr_opt_df['Severity'] == 'Level 1'])},
-                    {"Level": "Level 2", "Definition (Loss %)": "> 5% and ≤ 15%", "Tool Count": len(cr_opt_df[cr_opt_df['Severity'] == 'Level 2'])}
-                ]), hide_index=True, use_container_width=True)
+                st.markdown("##### Loss vs. Target Capacity")
+                cr_tgt_df = df[df['Alert Type'] == 'Capacity Risk (Target)']
+                if MATPLOTLIB_AVAILABLE: 
+                    render_matplot_bar(cr_tgt_df, "Loss vs Target Capacity")
+                with st.expander("Definitions & Thresholds"):
+                    st.markdown("- **Level 1:** > 0% and ≤ 5% loss\n- **Level 2:** > 5% and ≤ 10% loss")
+
+                st.markdown("##### Operation Status")
+                os_target_cats = ['Sensor Offline', 'Sensor Detached', 'Inactive']
+                os_df = df[df['Alert Type'].apply(lambda x: any(cat in x for cat in os_target_cats))]
+                os_counts = os_df['Alert Type'].apply(lambda x: x.replace("Operation Status (", "").replace(")", "")).value_counts()
+                if MATPLOTLIB_AVAILABLE: 
+                    render_matplot_donut(os_counts, "Status Distribution", status_colors)
+                with st.expander("Definitions & Categories"):
+                    st.markdown("- **Sensor Offline:** Sensor heartbeat lost.\n- **Sensor Detached:** Physical detachment detected.\n- **Inactive:** Tool idle beyond threshold.")
 
             with c2:
-                st.markdown("**Run Rate Stability**")
-                rr_stab_df = df[df['Alert Type'] == 'Low Run Rate - Time Stability']
-                st.dataframe(pd.DataFrame([
-                    {"Level": "Level 1", "Definition (Stability)": "75% ≤ rate < 85%", "Tool Count": len(rr_stab_df[rr_stab_df['Severity'] == 'Level 1'])},
-                    {"Level": "Level 2", "Definition (Stability)": "60% ≤ rate < 75%", "Tool Count": len(rr_stab_df[rr_stab_df['Severity'] == 'Level 2'])}
-                ]), hide_index=True, use_container_width=True)
+                st.markdown("##### Run Rate Efficiency")
+                rr_eff_df = df[df['Alert Type'] == 'Low Run Rate - Shot Efficiency']
+                if MATPLOTLIB_AVAILABLE: 
+                    render_matplot_bar(rr_eff_df, "Low Shot Efficiency")
+                with st.expander("Definitions & Thresholds"):
+                    st.markdown("- **Level 1:** 75% ≤ rate < 85%\n- **Level 2:** 60% ≤ rate < 75%")
 
-                st.markdown("**Capacity Risk: Loss vs. Target Capacity**")
-                cr_tgt_df = df[df['Alert Type'] == 'Capacity Risk (Target)']
-                st.dataframe(pd.DataFrame([
-                    {"Level": "Level 1", "Definition (Loss %)": "> 0% and ≤ 5%", "Tool Count": len(cr_tgt_df[cr_tgt_df['Severity'] == 'Level 1'])},
-                    {"Level": "Level 2", "Definition (Loss %)": "> 5% and ≤ 10%", "Tool Count": len(cr_tgt_df[cr_tgt_df['Severity'] == 'Level 2'])}
-                ]), hide_index=True, use_container_width=True)
+                st.markdown("##### Loss vs. Optimal Capacity")
+                cr_opt_df = df[df['Alert Type'] == 'Capacity Risk (Optimal)']
+                if MATPLOTLIB_AVAILABLE: 
+                    render_matplot_bar(cr_opt_df, "Loss vs Optimal Capacity")
+                with st.expander("Definitions & Thresholds"):
+                    st.markdown("- **Level 1:** > 0% and ≤ 5% loss\n- **Level 2:** > 5% and ≤ 15% loss")
 
-                st.markdown("**Tooling End of Life**")
+                st.markdown("##### Tooling End of Life")
                 eol_df = df[df['Alert Type'].str.contains('EOL')]
-                st.dataframe(pd.DataFrame([
-                    {"Level": "Level 1", "Utilization Rate": "80% - 90%", "Remaining Days": "11 - 30 days", "Tool Count": len(eol_df[eol_df['Severity'] == 'Level 1'])},
-                    {"Level": "Level 2", "Utilization Rate": "> 90%", "Remaining Days": "≤ 10 days", "Tool Count": len(eol_df[eol_df['Severity'] == 'Level 2'])}
-                ]), hide_index=True, use_container_width=True)
-
-            st.markdown("**Operation Status**")
-            os_df = df[df['Alert Type'].str.contains('Operation Status')]
-            
-            c_os1, c_os2 = st.columns([1, 1])
-            with c_os1:
-                st.dataframe(pd.DataFrame([
-                    {"Status Category": "Sensor Offline", "Tool Count": len(os_df[os_df['Alert Type'].str.contains('Offline')])},
-                    {"Status Category": "Sensor Detached", "Tool Count": len(os_df[os_df['Alert Type'].str.contains('Detached')])},
-                    {"Status Category": "Inactive", "Tool Count": len(os_df[os_df['Alert Type'].str.contains('Inactive')])}
-                ]), hide_index=True, use_container_width=True)
+                eol_counts = eol_df['Severity'].value_counts().sort_index()
+                if MATPLOTLIB_AVAILABLE: 
+                    render_matplot_donut(eol_counts, "EOL Severity Distribution", sev_colors)
+                with st.expander("Definitions & Thresholds"):
+                    st.markdown("- **Level 1:** Utilization 80%-90% OR Remaining ≤ 30 days\n- **Level 2:** Utilization > 90% OR Remaining ≤ 10 days")
 
             st.divider()
 
