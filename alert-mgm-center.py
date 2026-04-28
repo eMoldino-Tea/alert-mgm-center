@@ -1050,24 +1050,28 @@ elif page == "Client Alerts Portal":
         if high_risk_df.empty:
             st.success("No high-risk alerts currently active.")
         else:
-            top_tools = high_risk_df.groupby(['Tool', 'Plant', 'Supplier']).size().reset_index(name='Alert Count')
+            top_tools = high_risk_df.groupby('Tool').size().reset_index(name='Alert Count')
             top_tools = top_tools.sort_values(by='Alert Count', ascending=False).head(3)
             
             cols = st.columns(3)
             for idx, (_, tool_data) in enumerate(top_tools.iterrows()):
-                tool_alerts = high_risk_df[high_risk_df['Tool'] == tool_data['Tool']]
+                tool_name = tool_data['Tool']
+                tool_alerts = high_risk_df[high_risk_df['Tool'] == tool_name]
+                plant_name = tool_alerts['Plant'].iloc[0] if not tool_alerts.empty else "N/A"
+                supplier_name = tool_alerts['Supplier'].iloc[0] if not tool_alerts.empty else "N/A"
+                
                 with cols[idx]:
                     
                     st.markdown(f"""
                     <div class="action-card action-card-warning act-now-card">
                         <div class="risk-score-badge risk-score-warning">High Risk Alerts: {len(tool_alerts)}</div>
-                        <div class="card-tool">{tool_data['Tool']}</div>
-                        <div class="card-context">Plant: {tool_data['Plant']} <br/> Supplier: {tool_data['Supplier']}</div>
+                        <div class="card-tool">{tool_name}</div>
+                        <div class="card-context">Plant: {plant_name} <br/> Supplier: {supplier_name}</div>
                     </div>
                     """, unsafe_allow_html=True)
                     
                     if st.button(" ", key=f"act_now_btn_{idx}", help="Click to view high risk alerts", use_container_width=True):
-                        act_now_popup(tool_data['Tool'], tool_alerts)
+                        act_now_popup(tool_name, tool_alerts)
         
         st.divider()
 
