@@ -92,31 +92,36 @@ st.markdown("""
     .metric-value { color: #0F172A; font-size: 1.8rem; font-weight: bold; }
     
     /* Action Command Center Cards */
-    .action-card { background-color: white; border-top: 4px solid #EF4444; border-left: 1px solid #E2E8F0; border-right: 1px solid #E2E8F0; border-bottom: 1px solid #E2E8F0; border-radius: 8px; padding: 20px; margin-bottom: 5px; box-shadow: 0 4px 6px -1px rgba(0, 0, 0, 0.1); transition: all 0.2s ease; cursor: pointer; }
-    .action-card:hover { box-shadow: 0 10px 15px -3px rgba(0, 0, 0, 0.1); transform: translateY(-2px); border-top-color: #D97706; }
+    .action-card { background-color: white; border-top: 4px solid #EF4444; border-left: 1px solid #E2E8F0; border-right: 1px solid #E2E8F0; border-bottom: 1px solid #E2E8F0; border-radius: 8px; padding: 20px; box-shadow: 0 4px 6px -1px rgba(0, 0, 0, 0.1); }
     .action-card-warning { border-top: 4px solid #F59E0B; }
     .risk-score-badge { float: right; background-color: #FEE2E2; color: #991B1B; padding: 4px 10px; border-radius: 20px; font-weight: bold; font-size: 0.9rem; }
     .risk-score-warning { background-color: #FEF3C7; color: #92400E; }
     .card-tool { font-size: 1.3rem; font-weight: bold; color: #1E293B; margin-bottom: 5px;}
     .card-context { font-size: 0.95rem; color: #475569; margin-bottom: 0px; }
     
-    /* Clean overlay logic to preserve native scrolling */
+    /* Clean robust overlay logic */
     .act-now-card {
-        height: 145px !important;
+        height: 130px !important;
+        margin-bottom: 0px !important;
     }
     .st-key-act_now_btn_0, .st-key-act_now_btn_1, .st-key-act_now_btn_2 {
-        margin-top: -155px !important;
+        margin-top: -146px !important;
         position: relative !important;
-        z-index: 99 !important;
+        z-index: 999 !important;
     }
     .st-key-act_now_btn_0 button, .st-key-act_now_btn_1 button, .st-key-act_now_btn_2 button {
-        height: 145px !important;
+        height: 130px !important;
         width: 100% !important;
         background: transparent !important;
-        border: none !important;
+        border: 2px solid transparent !important;
         color: transparent !important;
         box-shadow: none !important;
         cursor: pointer !important;
+        border-radius: 8px !important;
+    }
+    .st-key-act_now_btn_0 button:hover, .st-key-act_now_btn_1 button:hover, .st-key-act_now_btn_2 button:hover {
+        border-color: #D97706 !important;
+        background-color: rgba(217, 119, 6, 0.05) !important;
     }
     </style>
 """, unsafe_allow_html=True)
@@ -815,14 +820,14 @@ elif page == "Client Alerts Portal":
                 with cols[idx]:
                     
                     st.markdown(f"""
-                    <div class="action-card action-card-warning act-now-card" style="height: 100%;">
+                    <div class="action-card action-card-warning act-now-card">
                         <div class="risk-score-badge risk-score-warning">High Risk Alerts: {len(tool_alerts)}</div>
                         <div class="card-tool">{tool_data['Tool']}</div>
                         <div class="card-context">Plant: {tool_data['Plant']} <br/> Supplier: {tool_data['Supplier']}</div>
                     </div>
                     """, unsafe_allow_html=True)
                     
-                    if st.button(" ", key=f"act_now_btn_{idx}", help="Click to view high risk alerts"):
+                    if st.button(" ", key=f"act_now_btn_{idx}", help="Click to view high risk alerts", use_container_width=True):
                         act_now_popup(tool_data['Tool'], tool_alerts)
         
         st.divider()
