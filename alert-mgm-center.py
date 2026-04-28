@@ -208,6 +208,59 @@ def generate_fpdf_report(df):
     except TypeError:
         return pdf.output(dest='S').encode('latin-1')
 
+def generate_client_pdf_report(df):
+    def clean(text):
+        text = str(text).replace('≤', '<=').replace('≥', '>=')
+        return text.encode('latin-1', 'replace').decode('latin-1')
+        
+    class PDF(FPDF):
+        def header(self):
+            self.set_fill_color(30, 58, 138)
+            self.rect(0, 0, 297, 20, 'F')
+            self.set_y(6)
+            self.set_font('Arial', 'B', 16)
+            self.set_text_color(255, 255, 255)
+            self.cell(10)
+            self.cell(150, 8, clean('eMoldino Alert Management | Client Summary'), 0, 0, 'L')
+            self.set_font('Arial', '', 10)
+            self.cell(120, 8, clean(f'Generated: {datetime.datetime.now().strftime("%Y-%m-%d %H:%M")}'), 0, 1, 'R')
+            self.ln(10)
+            
+    pdf = PDF('L', 'mm', 'A4')
+    pdf.add_page()
+    pdf.set_font('Arial', 'B', 14)
+    pdf.set_text_color(30, 58, 138)
+    pdf.cell(0, 10, "ACTIVE ALERTS DIRECTORY", 0, 1, 'L')
+    pdf.ln(2)
+    
+    pdf.set_font('Arial', 'B', 9)
+    pdf.set_fill_color(30, 58, 138)
+    pdf.set_text_color(255, 255, 255)
+    
+    cols = ["Alert ID", "Alert Name", "Tool", "Alert Type", "Severity", "Date/Time"]
+    col_widths = [25, 60, 30, 60, 25, 45] 
+    
+    for i in range(len(cols)):
+        pdf.cell(col_widths[i], 8, clean(cols[i]), 1, 0, 'C', 1)
+    pdf.ln()
+    
+    pdf.set_font('Arial', '', 8)
+    pdf.set_text_color(0, 0, 0)
+    
+    for _, row in df.iterrows():
+        pdf.cell(col_widths[0], 8, clean(str(row["Alert ID"])[:20]), 1)
+        pdf.cell(col_widths[1], 8, clean(str(row["Alert Name"])[:35]), 1)
+        pdf.cell(col_widths[2], 8, clean(str(row["Tool"])[:20]), 1)
+        pdf.cell(col_widths[3], 8, clean(str(row["Alert Type"])[:35]), 1)
+        pdf.cell(col_widths[4], 8, clean(str(row["Severity"])[:20]), 1)
+        pdf.cell(col_widths[5], 8, clean(str(row["Date/Time"])[:25]), 1)
+        pdf.ln()
+        
+    try:
+        return bytes(pdf.output())
+    except TypeError:
+        return pdf.output(dest='S').encode('latin-1')
+
 # --- REUSABLE FILTER FUNCTION ---
 def render_filters(key_prefix):
     st.caption("Select desired filters first to define the target scope. Leave empty to apply globally.")
@@ -565,8 +618,10 @@ elif page == "Client Alerts Portal":
     # MAIN LISTING PAGE & COMMAND CENTER
     # ---------------------------------------------------------
     if st.session_state.client_portal_view == "list":
-        st.markdown('<div class="main-header">Alerts Command Center</div>', unsafe_allow_html=True)
-        st.markdown('<div class="sub-header">Triage critical issues, identify supply chain bottlenecks, and track proactive watchlists.</div>', unsafe_allow_html=True)
+        header_col, export_col = st.columns([5, 1])
+        with header_col:
+            st.markdown('<div class="main-header">Alerts Command Center</div>', unsafe_allow_html=True)
+            st.markdown('<div class="sub-header">Triage critical issues, identify supply chain bottlenecks, and track proactive watchlists.</div>', unsafe_allow_html=True)
         
         df = st.session_state.client_alerts_db.copy()
         
@@ -584,6 +639,43 @@ elif page == "Client Alerts Portal":
         search_query = st.text_input("🔍 Search (Tool, Part, Name)")
         if search_query:
             df = df[df.apply(lambda row: row.astype(str).str.contains(search_query, case=False).any(), axis=1)]
+
+        with export_col:
+            st.write("")
+            st.write("")
+            with st.popover("📥 Export Data", use_container_width=True):
+                st.caption(f"Export {len(df)} filtered alerts.")
+                export_format = st.radio("Format", ["CSV", "PDF"], horizontal=True, key="client_export_format", label_visibility="collapsed")
+                
+                if export_format == "CSV":
+                    export_data = df.to_csv(index=False).encode('utf-8')
+                    st.download_button(
+                        label="⬇️ Download CSV",
+                        data=export_data,
+                        file_name=f"client_alerts_{datetime.datetime.now().strftime('%Y%m%d')}.csv",
+                        mime="text/csv",
+                        use_container_width=True,
+                        key="client_csv_dl"
+                    )
+                else:
+                    if FPDF_AVAILABLE:
+                        export_data = generate_client_pdf_report(df)
+                        st.download_button(
+                            label="⬇️ Download PDF Report",
+                            data=export_data,
+                            file_name=f"client_alerts_{datetime.datetime.now().strftime('%Y%m%d')}.pdf",
+                            mime="application/pdf",
+                            use_container_width=True,
+                            key="client_pdf_dl"
+                        )
+                    else:
+                        st.warning("⚠️ FPDF library missing. Run `pip install fpdf`.")
+                
+                st.divider()
+                st.write("✉️ Send to Email")
+                email_input = st.text_input("Email Address", value="user@client.com", key="client_email_in", label_visibility="collapsed")
+                if st.button("Send Now", type="primary", use_container_width=True, key="client_email_btn"):
+                    st.success(f"Sent to {email_input}!")
 
         st.write("")
         
