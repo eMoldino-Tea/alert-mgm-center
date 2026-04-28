@@ -735,14 +735,15 @@ elif page == "Client Alerts Portal":
             tooltip=['Level', 'Count']
         ).add_params(selection).properties(height=250)
         
+        safe_label = label.replace(" ", "_").lower()
         try:
-            event = st.altair_chart(chart, use_container_width=True, on_select="rerun")
+            event = st.altair_chart(chart, use_container_width=True, on_select="rerun", key=f"bar_{safe_label}")
             if event and hasattr(event, 'selection') and 'select' in event.selection and event.selection['select']:
                 selected_level = event.selection['select'][0]['Level']
                 lvl_df = df_subset[df_subset['Severity'] == selected_level]
                 category_popup(label, selected_level, lvl_df)
         except TypeError:
-            st.altair_chart(chart, use_container_width=True)
+            st.altair_chart(chart, use_container_width=True, key=f"bar_fb_{safe_label}")
             render_breakdown_actions(label, df_subset, categories)
 
     def render_interactive_donut(df_subset, label, categories, color_map, is_status=False):
@@ -771,8 +772,9 @@ elif page == "Client Alerts Portal":
             opacity=alt.condition(selection, alt.value(1), alt.value(0.7))
         ).add_params(selection).properties(height=250)
 
+        safe_label = label.replace(" ", "_").lower()
         try:
-            event = st.altair_chart(chart, use_container_width=True, on_select="rerun")
+            event = st.altair_chart(chart, use_container_width=True, on_select="rerun", key=f"donut_{safe_label}")
             if event and hasattr(event, 'selection') and 'select' in event.selection and event.selection['select']:
                 selected_cat = event.selection['select'][0]['Category']
                 if is_status:
@@ -781,7 +783,7 @@ elif page == "Client Alerts Portal":
                     lvl_df = df_subset[df_subset['Severity'] == selected_cat]
                 category_popup(label, selected_cat, lvl_df)
         except TypeError:
-            st.altair_chart(chart, use_container_width=True)
+            st.altair_chart(chart, use_container_width=True, key=f"donut_fb_{safe_label}")
             render_breakdown_actions(label, df_subset, categories, is_status=is_status)
 
     # 6 Main Tabs for the Client Portal
