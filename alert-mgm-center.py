@@ -755,54 +755,47 @@ elif page == "Client Alerts Portal":
             
             c1, c2 = st.columns(2)
             with c1:
-                st.markdown("##### Cycle Time")
                 ct_df = df[df['Alert Type'] == 'Cycle Time']
                 if MATPLOTLIB_AVAILABLE: render_matplot_bar(ct_df, "Cycle Time Deviations")
                 with st.expander("Definitions & Thresholds"):
                     st.markdown("- **Level 1:** > 0% and ≤ 5% deviation\n- **Level 2:** > 5% and ≤ 15% deviation\n- **Level 3:** > 15% deviation")
                 
-                st.markdown("##### Run Rate Stability")
                 rr_stab_df = df[df['Alert Type'] == 'Low Run Rate - Time Stability']
-                if MATPLOTLIB_AVAILABLE: render_matplot_bar(rr_stab_df, "Low Time Stability")
+                if MATPLOTLIB_AVAILABLE: render_matplot_bar(rr_stab_df, "Low Run Rate Time Stability")
                 with st.expander("Definitions & Thresholds"):
                     st.markdown("- **Level 1:** 75% ≤ rate < 85%\n- **Level 2:** 60% ≤ rate < 75%\n- **Level 3:** < 60%")
 
-                st.markdown("##### Loss vs. Target Capacity")
                 cr_tgt_df = df[df['Alert Type'] == 'Capacity Risk (Target)']
-                if MATPLOTLIB_AVAILABLE: render_matplot_bar(cr_tgt_df, "Loss vs Target Capacity")
+                if MATPLOTLIB_AVAILABLE: render_matplot_bar(cr_tgt_df, "Loss vs. Target Capacity")
                 with st.expander("Definitions & Thresholds"):
                     st.markdown("- **Level 1:** > 0% and ≤ 5% loss\n- **Level 2:** > 5% and ≤ 10% loss\n- **Level 3:** > 10% loss")
 
-                st.markdown("##### Operation Status")
                 os_target_cats = ['Sensor Offline', 'Sensor Detached', 'Inactive']
                 os_df = df[df['Alert Type'].apply(lambda x: any(cat in x for cat in os_target_cats))]
                 os_counts = os_df['Alert Type'].apply(lambda x: x.replace("Operation Status (", "").replace(")", "")).value_counts()
                 os_aligned = pd.Series({cat: os_counts.get(cat, 0) for cat in os_target_cats})
                 os_aligned = os_aligned[os_aligned > 0] 
-                if MATPLOTLIB_AVAILABLE: render_matplot_donut(os_aligned, "Status Distribution", status_colors)
+                if MATPLOTLIB_AVAILABLE: render_matplot_donut(os_aligned, "Operation Status", status_colors)
                 with st.expander("Definitions & Categories"):
                     st.markdown("- **Sensor Offline:** Sensor heartbeat lost.\n- **Sensor Detached:** Physical detachment detected.\n- **Inactive:** Tool idle beyond threshold.")
 
             with c2:
-                st.markdown("##### Run Rate Efficiency")
                 rr_eff_df = df[df['Alert Type'] == 'Low Run Rate - Shot Efficiency']
-                if MATPLOTLIB_AVAILABLE: render_matplot_bar(rr_eff_df, "Low Shot Efficiency")
+                if MATPLOTLIB_AVAILABLE: render_matplot_bar(rr_eff_df, "Low Run Rate Shot Efficiency")
                 with st.expander("Definitions & Thresholds"):
                     st.markdown("- **Level 1:** 75% ≤ rate < 85%\n- **Level 2:** 60% ≤ rate < 75%\n- **Level 3:** < 60%")
 
-                st.markdown("##### Loss vs. Optimal Capacity")
                 cr_opt_df = df[df['Alert Type'] == 'Capacity Risk (Optimal)']
-                if MATPLOTLIB_AVAILABLE: render_matplot_bar(cr_opt_df, "Loss vs Optimal Capacity")
+                if MATPLOTLIB_AVAILABLE: render_matplot_bar(cr_opt_df, "Loss vs. Optimal Capacity")
                 with st.expander("Definitions & Thresholds"):
                     st.markdown("- **Level 1:** > 0% and ≤ 5% loss\n- **Level 2:** > 5% and ≤ 10% loss\n- **Level 3:** > 10% loss")
 
-                st.markdown("##### Tooling End of Life")
                 eol_df = df[df['Alert Type'].str.contains('EOL')]
                 categories = ['Level 1', 'Level 2', 'Level 3']
                 eol_counts = eol_df['Severity'].value_counts()
                 eol_counts_aligned = pd.Series({cat: eol_counts.get(cat, 0) for cat in categories})
                 eol_counts_aligned = eol_counts_aligned[eol_counts_aligned > 0]
-                if MATPLOTLIB_AVAILABLE: render_matplot_donut(eol_counts_aligned, "EOL Severity Distribution", sev_colors)
+                if MATPLOTLIB_AVAILABLE: render_matplot_donut(eol_counts_aligned, "Tooling End of Life", sev_colors)
                 with st.expander("Definitions & Thresholds"):
                     st.markdown("- **Level 1:** Utilization 70%-80% OR Remaining ≤ 45 days\n- **Level 2:** Utilization 80%-90% OR Remaining ≤ 30 days\n- **Level 3:** Utilization > 90% OR Remaining ≤ 10 days")
 
