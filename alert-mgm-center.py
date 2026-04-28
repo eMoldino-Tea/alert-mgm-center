@@ -91,12 +91,12 @@ st.markdown("""
     .metric-value { color: #0F172A; font-size: 1.8rem; font-weight: bold; }
     
     /* Action Command Center Cards */
-    .action-card { background-color: white; border-top: 4px solid #EF4444; border-left: 1px solid #E2E8F0; border-right: 1px solid #E2E8F0; border-bottom: 1px solid #E2E8F0; border-radius: 8px; padding: 20px; margin-bottom: 15px; box-shadow: 0 4px 6px -1px rgba(0, 0, 0, 0.1); }
+    .action-card { background-color: white; border-top: 4px solid #EF4444; border-left: 1px solid #E2E8F0; border-right: 1px solid #E2E8F0; border-bottom: 1px solid #E2E8F0; border-radius: 8px; padding: 20px; margin-bottom: 5px; box-shadow: 0 4px 6px -1px rgba(0, 0, 0, 0.1); }
     .action-card-warning { border-top: 4px solid #F59E0B; }
     .risk-score-badge { float: right; background-color: #FEE2E2; color: #991B1B; padding: 4px 10px; border-radius: 20px; font-weight: bold; font-size: 0.9rem; }
     .risk-score-warning { background-color: #FEF3C7; color: #92400E; }
     .card-tool { font-size: 1.3rem; font-weight: bold; color: #1E293B; margin-bottom: 5px;}
-    .card-context { font-size: 0.95rem; color: #475569; margin-bottom: 15px; }
+    .card-context { font-size: 0.95rem; color: #475569; margin-bottom: 0px; }
     </style>
 """, unsafe_allow_html=True)
 
@@ -111,24 +111,21 @@ def calculate_risk_index(row):
     """Calculates a 1-100 Risk Score based on Severity, Impact, and Time Unresolved"""
     score = 10
     
-    # 1. Severity Weight
     if row['Severity'] == "Level 3": score += 40
     elif row['Severity'] == "Level 2": score += 20
     elif row['Severity'] == "Level 1": score += 10
     elif row['Severity'] in ["Event", "Status"]: score += 15
     
-    # 2. Impact Weight
     if "Capacity Risk" in row['Alert Type']: score += 30
     elif "Run Rate" in row['Alert Type']: score += 20
     elif "Cycle Time" in row['Alert Type']: score += 15
     elif "EOL" in row['Alert Type']: score += 10
     elif "Operation Status" in row['Alert Type']: score += 20
     
-    # 3. Time Decay (Simulated by extracting days from timestamp)
     days_old = (datetime.datetime(2026, 4, 28, 10, 0) - pd.to_datetime(row['Date/Time'])).days
     score += (days_old * 3)
     
-    return min(int(score), 99) # Cap at 99
+    return min(int(score), 99) 
 
 # --- EXECUTIVE POWER-BI STYLE PDF GENERATOR ---
 def generate_fpdf_report(df):
@@ -546,7 +543,7 @@ elif page == "Client Alerts Portal":
         
         df = st.session_state.client_alerts_db.copy()
         
-        # Calculate dynamic risk score for workflow
+        # Calculate dynamic risk score for workflow sorting
         df['Risk Score'] = df.apply(calculate_risk_index, axis=1)
         df = df.sort_values(by='Risk Score', ascending=False)
         
@@ -662,7 +659,6 @@ elif page == "Client Alerts Portal":
         ])
 
         with cat_tabs[0]: # Dashboard Overview
-            st.write("High-level summary of active alerts matching your current filters.")
 
             # --- 1. Core KPIs ---
             kpi1, kpi2, kpi3, kpi4 = st.columns(4)
@@ -675,7 +671,7 @@ elif page == "Client Alerts Portal":
 
             # --- 2. ACT NOW: Triage Banner ---
             st.markdown("### Act Now: Critical Priorities")
-            st.write("Top tools with the highest number of Level 2 and Level 3 (higher risk) alerts.")
+            st.write("Tools with the highest number of Level 2 and above (high risk) alerts.")
             
             high_risk_df = df[df['Severity'].isin(['Level 2', 'Level 3'])]
             if high_risk_df.empty:
@@ -687,20 +683,19 @@ elif page == "Client Alerts Portal":
                 cols = st.columns(3)
                 for idx, (_, tool_data) in enumerate(top_tools.iterrows()):
                     with cols[idx]:
+                        # Interactive HTML Card without standard buttons
                         st.markdown(f"""
                         <div class="action-card action-card-warning">
-                            <div class="risk-score-badge risk-score-warning">Alerts: {tool_data['Alert Count']}</div>
-                            <div style="color: #64748B; font-size: 0.85rem; font-weight: bold; text-transform: uppercase;">High-Risk Priority</div>
+                            <div class="risk-score-badge risk-score-warning">Number of high risk alerts: {tool_data['Alert Count']}</div>
                             <div class="card-tool">{tool_data['Tool']}</div>
                             <div class="card-context">Plant: {tool_data['Plant']} <br/> Supplier: {tool_data['Supplier']}</div>
                         </div>
                         """, unsafe_allow_html=True)
                         
-                        b1, b2 = st.columns(2)
-                        if b1.button("Assign Tool", key=f"assign_{idx}", use_container_width=True):
-                            st.toast(f"Assigned {tool_data['Tool']} to Site Manager.")
-                        if b2.button("View Tool", key=f"view_{idx}", use_container_width=True):
-                            st.toast(f"Navigating to details for {tool_data['Tool']}.")
+                        # Drill-down Expander directly underneath the widget
+                        with st.expander("📊 View Tool Alerts"):
+                            tool_alerts = df[df['Tool'] == tool_data['Tool']].sort_values(by='Severity', ascending=False)
+                            st.dataframe(tool_alerts[['Alert Name', 'Severity', 'Alert Type', 'Metric_1', 'Date/Time']], hide_index=True, use_container_width=True)
             
             st.divider()
 
@@ -710,23 +705,29 @@ elif page == "Client Alerts Portal":
             
             c1, c2 = st.columns(2)
             with c1:
-                st.markdown("##### Cycle Time")
+                st.markdown("##### Cycle Time Deviations")
                 ct_df = df[df['Alert Type'] == 'Cycle Time']
                 if MATPLOTLIB_AVAILABLE: render_matplot_bar(ct_df, "Cycle Time Deviations")
                 with st.expander("Definitions & Thresholds"):
                     st.markdown("- **Level 1:** > 0% and ≤ 5% deviation\n- **Level 2:** > 5% and ≤ 15% deviation\n- **Level 3:** > 15% deviation")
+                with st.expander("📋 Click to view Alerts Table"):
+                    st.dataframe(ct_df.sort_values(by='Severity', ascending=False)[['Alert Name', 'Tool', 'Severity', 'Date/Time', 'Metric_1']], hide_index=True, use_container_width=True)
                 
-                st.markdown("##### Run Rate Stability")
+                st.markdown("##### Low Run Rate Time Stability")
                 rr_stab_df = df[df['Alert Type'] == 'Low Run Rate - Time Stability']
                 if MATPLOTLIB_AVAILABLE: render_matplot_bar(rr_stab_df, "Low Run Rate Time Stability")
                 with st.expander("Definitions & Thresholds"):
                     st.markdown("- **Level 1:** 75% ≤ rate < 85%\n- **Level 2:** 60% ≤ rate < 75%\n- **Level 3:** < 60%")
+                with st.expander("📋 Click to view Alerts Table"):
+                    st.dataframe(rr_stab_df.sort_values(by='Severity', ascending=False)[['Alert Name', 'Tool', 'Severity', 'Date/Time', 'Metric_1']], hide_index=True, use_container_width=True)
 
                 st.markdown("##### Loss vs. Target Capacity")
                 cr_tgt_df = df[df['Alert Type'] == 'Capacity Risk (Target)']
                 if MATPLOTLIB_AVAILABLE: render_matplot_bar(cr_tgt_df, "Loss vs. Target Capacity")
                 with st.expander("Definitions & Thresholds"):
                     st.markdown("- **Level 1:** > 0% and ≤ 5% loss\n- **Level 2:** > 5% and ≤ 10% loss\n- **Level 3:** > 10% loss")
+                with st.expander("📋 Click to view Alerts Table"):
+                    st.dataframe(cr_tgt_df.sort_values(by='Severity', ascending=False)[['Alert Name', 'Tool', 'Severity', 'Date/Time', 'Metric_1']], hide_index=True, use_container_width=True)
 
                 st.markdown("##### Operation Status")
                 os_target_cats = ['Sensor Offline', 'Sensor Detached', 'Inactive']
@@ -737,19 +738,25 @@ elif page == "Client Alerts Portal":
                 if MATPLOTLIB_AVAILABLE: render_matplot_donut(os_aligned, "Operation Status", status_colors)
                 with st.expander("Definitions & Categories"):
                     st.markdown("- **Sensor Offline:** Sensor heartbeat lost.\n- **Sensor Detached:** Physical detachment detected.\n- **Inactive:** Tool idle beyond threshold.")
+                with st.expander("📋 Click to view Alerts Table"):
+                    st.dataframe(os_df.sort_values(by='Severity', ascending=False)[['Alert Name', 'Tool', 'Severity', 'Date/Time', 'Metric_1']], hide_index=True, use_container_width=True)
 
             with c2:
-                st.markdown("##### Run Rate Efficiency")
+                st.markdown("##### Low Run Rate Shot Efficiency")
                 rr_eff_df = df[df['Alert Type'] == 'Low Run Rate - Shot Efficiency']
                 if MATPLOTLIB_AVAILABLE: render_matplot_bar(rr_eff_df, "Low Run Rate Shot Efficiency")
                 with st.expander("Definitions & Thresholds"):
                     st.markdown("- **Level 1:** 75% ≤ rate < 85%\n- **Level 2:** 60% ≤ rate < 75%\n- **Level 3:** < 60%")
+                with st.expander("📋 Click to view Alerts Table"):
+                    st.dataframe(rr_eff_df.sort_values(by='Severity', ascending=False)[['Alert Name', 'Tool', 'Severity', 'Date/Time', 'Metric_1']], hide_index=True, use_container_width=True)
 
                 st.markdown("##### Loss vs. Optimal Capacity")
                 cr_opt_df = df[df['Alert Type'] == 'Capacity Risk (Optimal)']
                 if MATPLOTLIB_AVAILABLE: render_matplot_bar(cr_opt_df, "Loss vs. Optimal Capacity")
                 with st.expander("Definitions & Thresholds"):
                     st.markdown("- **Level 1:** > 0% and ≤ 5% loss\n- **Level 2:** > 5% and ≤ 10% loss\n- **Level 3:** > 10% loss")
+                with st.expander("📋 Click to view Alerts Table"):
+                    st.dataframe(cr_opt_df.sort_values(by='Severity', ascending=False)[['Alert Name', 'Tool', 'Severity', 'Date/Time', 'Metric_1']], hide_index=True, use_container_width=True)
 
                 st.markdown("##### Tooling End of Life")
                 eol_df = df[df['Alert Type'].str.contains('EOL')]
@@ -760,6 +767,8 @@ elif page == "Client Alerts Portal":
                 if MATPLOTLIB_AVAILABLE: render_matplot_donut(eol_counts_aligned, "Tooling End of Life", sev_colors)
                 with st.expander("Definitions & Thresholds"):
                     st.markdown("- **Level 1:** Utilization 70%-80% OR Remaining ≤ 45 days\n- **Level 2:** Utilization 80%-90% OR Remaining ≤ 30 days\n- **Level 3:** Utilization > 90% OR Remaining ≤ 10 days")
+                with st.expander("📋 Click to view Alerts Table"):
+                    st.dataframe(eol_df.sort_values(by='Severity', ascending=False)[['Alert Name', 'Tool', 'Severity', 'Date/Time', 'Metric_1']], hide_index=True, use_container_width=True)
 
             st.divider()
 
