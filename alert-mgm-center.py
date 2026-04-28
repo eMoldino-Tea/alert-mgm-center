@@ -662,7 +662,6 @@ elif page == "Client Alerts Portal":
         ])
 
         with cat_tabs[0]: # Dashboard Overview
-            st.markdown("### 📊 Executive Command Center")
             st.write("High-level summary of active alerts matching your current filters.")
 
             # --- 1. Core KPIs ---
@@ -675,101 +674,61 @@ elif page == "Client Alerts Portal":
             st.divider()
 
             # --- 2. ACT NOW: Triage Banner ---
-            st.markdown("### 🚨 Act Now: Critical Priorities")
-            st.write("Top issues sorted by proprietary Risk Index (Severity + Financial Impact + Unresolved Time).")
+            st.markdown("### Act Now: Critical Priorities")
+            st.write("Top tools with the highest number of Level 2 and Level 3 (higher risk) alerts.")
             
-            top_alerts = df.head(3)
-            if top_alerts.empty:
-                st.success("No active alerts currently require your attention.")
+            high_risk_df = df[df['Severity'].isin(['Level 2', 'Level 3'])]
+            if high_risk_df.empty:
+                st.success("No high-risk alerts currently active.")
             else:
+                top_tools = high_risk_df.groupby(['Tool', 'Plant', 'Supplier']).size().reset_index(name='Alert Count')
+                top_tools = top_tools.sort_values(by='Alert Count', ascending=False).head(3)
+                
                 cols = st.columns(3)
-                for idx, (_, alert) in enumerate(top_alerts.iterrows()):
+                for idx, (_, tool_data) in enumerate(top_tools.iterrows()):
                     with cols[idx]:
-                        card_class = "action-card"
-                        badge_class = "risk-score-badge"
-                        if alert['Risk Score'] < 75:
-                            card_class += " action-card-warning"
-                            badge_class += " risk-score-warning"
-                            
                         st.markdown(f"""
-                        <div class="{card_class}">
-                            <div class="{badge_class}">🔥 Risk: {alert['Risk Score']}/100</div>
-                            <div style="color: #64748B; font-size: 0.85rem; font-weight: bold; text-transform: uppercase;">{alert['Alert Type']}</div>
-                            <div class="card-tool">{alert['Tool']} ({alert['Plant']})</div>
-                            <div class="card-context"><b>Trigger Metric:</b> {alert['Metric_1']}</div>
+                        <div class="action-card action-card-warning">
+                            <div class="risk-score-badge risk-score-warning">Alerts: {tool_data['Alert Count']}</div>
+                            <div style="color: #64748B; font-size: 0.85rem; font-weight: bold; text-transform: uppercase;">High-Risk Priority</div>
+                            <div class="card-tool">{tool_data['Tool']}</div>
+                            <div class="card-context">Plant: {tool_data['Plant']} <br/> Supplier: {tool_data['Supplier']}</div>
                         </div>
                         """, unsafe_allow_html=True)
                         
                         b1, b2 = st.columns(2)
-                        if b1.button("Assign", key=f"assign_{alert['Alert ID']}", use_container_width=True):
-                            st.toast(f"Assigned {alert['Alert ID']} to Site Manager.")
-                        if b2.button("Acknowledge", key=f"ack_{alert['Alert ID']}", use_container_width=True):
-                            st.toast(f"Acknowledged {alert['Alert ID']}.")
+                        if b1.button("Assign Tool", key=f"assign_{idx}", use_container_width=True):
+                            st.toast(f"Assigned {tool_data['Tool']} to Site Manager.")
+                        if b2.button("View Tool", key=f"view_{idx}", use_container_width=True):
+                            st.toast(f"Navigating to details for {tool_data['Tool']}.")
             
             st.divider()
 
-            # --- 3. Heatmap & Watchlist ---
-            col_heatmap, col_watchlist = st.columns([3, 2])
-            with col_heatmap:
-                st.markdown("### 📍 Impact Heatmap (By Supplier)")
-                st.write("Identify systemic bottlenecks affecting specific suppliers.")
-                if not df.empty and MATPLOTLIB_AVAILABLE:
-                    sup_risk = df.groupby('Supplier')['Risk Score'].sum().sort_values(ascending=True)
-                    fig_heat, ax_heat = plt.subplots(figsize=(6, 4))
-                    colors = ['#EF4444' if score > 500 else '#F59E0B' if score > 200 else '#3B82F6' for score in sup_risk]
-                    bars = ax_heat.barh(sup_risk.index, sup_risk.values, color=colors, height=0.6)
-                    for bar in bars:
-                        width = bar.get_width()
-                        ax_heat.text(width + 5, bar.get_y() + bar.get_height()/2, f"Total Risk: {int(width)}", ha='left', va='center', fontsize=9, fontweight='bold', color='#475569')
-                    ax_heat.spines['top'].set_visible(False)
-                    ax_heat.spines['right'].set_visible(False)
-                    ax_heat.spines['left'].set_visible(False)
-                    ax_heat.spines['bottom'].set_visible(False)
-                    ax_heat.xaxis.set_visible(False)
-                    plt.tight_layout()
-                    st.pyplot(fig_heat)
-                else:
-                    st.info("Insufficient data for heatmap.")
-
-            with col_watchlist:
-                st.markdown("### 🔭 Proactive Watchlist")
-                st.write("Degrading trends and tools approaching end-of-life.")
-                watchlist_df = df[(df['Severity'] == 'Level 2') | (df['Alert Type'].str.contains('EOL'))].sort_values(by='Date/Time', ascending=False).head(5)
-                if watchlist_df.empty:
-                    st.success("No proactive warnings detected.")
-                else:
-                    for _, w_alert in watchlist_df.iterrows():
-                        icon = "⏳" if "EOL" in w_alert['Alert Type'] else "📉"
-                        st.markdown(f"""
-                        <div style="background-color: #F8FAFC; border-left: 3px solid #F59E0B; padding: 10px 15px; margin-bottom: 8px; border-radius: 4px;">
-                            <div style="font-weight: bold; color: #1E293B;">{icon} {w_alert['Tool']} - {w_alert['Alert Type']}</div>
-                            <div style="font-size: 0.85rem; color: #64748B;">{w_alert['Supplier']} | Metric: {w_alert['Metric_1']}</div>
-                        </div>
-                        """, unsafe_allow_html=True)
-            
-            st.divider()
-
-            # --- 4. Alert Distribution Dashboards (The 6 Graphs) ---
-            st.markdown("### 📈 Alert Distribution Breakdowns")
+            # --- 3. Alert Distribution Breakdowns ---
+            st.markdown("### Alert Distribution Breakdowns")
             st.write("Detailed threshold analysis across the 6 major alert logic categories.")
             
             c1, c2 = st.columns(2)
             with c1:
+                st.markdown("##### Cycle Time")
                 ct_df = df[df['Alert Type'] == 'Cycle Time']
                 if MATPLOTLIB_AVAILABLE: render_matplot_bar(ct_df, "Cycle Time Deviations")
                 with st.expander("Definitions & Thresholds"):
                     st.markdown("- **Level 1:** > 0% and ≤ 5% deviation\n- **Level 2:** > 5% and ≤ 15% deviation\n- **Level 3:** > 15% deviation")
                 
+                st.markdown("##### Run Rate Stability")
                 rr_stab_df = df[df['Alert Type'] == 'Low Run Rate - Time Stability']
                 if MATPLOTLIB_AVAILABLE: render_matplot_bar(rr_stab_df, "Low Run Rate Time Stability")
                 with st.expander("Definitions & Thresholds"):
                     st.markdown("- **Level 1:** 75% ≤ rate < 85%\n- **Level 2:** 60% ≤ rate < 75%\n- **Level 3:** < 60%")
 
+                st.markdown("##### Loss vs. Target Capacity")
                 cr_tgt_df = df[df['Alert Type'] == 'Capacity Risk (Target)']
                 if MATPLOTLIB_AVAILABLE: render_matplot_bar(cr_tgt_df, "Loss vs. Target Capacity")
                 with st.expander("Definitions & Thresholds"):
                     st.markdown("- **Level 1:** > 0% and ≤ 5% loss\n- **Level 2:** > 5% and ≤ 10% loss\n- **Level 3:** > 10% loss")
 
+                st.markdown("##### Operation Status")
                 os_target_cats = ['Sensor Offline', 'Sensor Detached', 'Inactive']
                 os_df = df[df['Alert Type'].apply(lambda x: any(cat in x for cat in os_target_cats))]
                 os_counts = os_df['Alert Type'].apply(lambda x: x.replace("Operation Status (", "").replace(")", "")).value_counts()
@@ -780,16 +739,19 @@ elif page == "Client Alerts Portal":
                     st.markdown("- **Sensor Offline:** Sensor heartbeat lost.\n- **Sensor Detached:** Physical detachment detected.\n- **Inactive:** Tool idle beyond threshold.")
 
             with c2:
+                st.markdown("##### Run Rate Efficiency")
                 rr_eff_df = df[df['Alert Type'] == 'Low Run Rate - Shot Efficiency']
                 if MATPLOTLIB_AVAILABLE: render_matplot_bar(rr_eff_df, "Low Run Rate Shot Efficiency")
                 with st.expander("Definitions & Thresholds"):
                     st.markdown("- **Level 1:** 75% ≤ rate < 85%\n- **Level 2:** 60% ≤ rate < 75%\n- **Level 3:** < 60%")
 
+                st.markdown("##### Loss vs. Optimal Capacity")
                 cr_opt_df = df[df['Alert Type'] == 'Capacity Risk (Optimal)']
                 if MATPLOTLIB_AVAILABLE: render_matplot_bar(cr_opt_df, "Loss vs. Optimal Capacity")
                 with st.expander("Definitions & Thresholds"):
                     st.markdown("- **Level 1:** > 0% and ≤ 5% loss\n- **Level 2:** > 5% and ≤ 10% loss\n- **Level 3:** > 10% loss")
 
+                st.markdown("##### Tooling End of Life")
                 eol_df = df[df['Alert Type'].str.contains('EOL')]
                 categories = ['Level 1', 'Level 2', 'Level 3']
                 eol_counts = eol_df['Severity'].value_counts()
@@ -801,28 +763,18 @@ elif page == "Client Alerts Portal":
 
             st.divider()
 
-            # --- 5. Smart Triage Queue ---
-            st.markdown("### 📋 Smart Triage Queue")
-            st.write("Complete ledger of active alerts, interactively sorted by the Priority Risk Index.")
-            
-            if not df.empty:
-                triage_df = df.copy()
-                triage_df['Trigger Info'] = triage_df.apply(format_trigger_value, axis=1)
-                workflow_cols = ['Risk Score', 'Alert ID', 'Alert Name', 'Tool', 'Supplier', 'Severity', 'Status', 'Owner']
-                triage_display = triage_df[workflow_cols].copy()
-                
-                st.data_editor(
-                    triage_display,
-                    column_config={
-                        "Risk Score": st.column_config.ProgressColumn("Priority (1-100)", help="Calculated Risk Index", format="%d", min_value=0, max_value=100),
-                        "Status": st.column_config.SelectboxColumn("Workflow Status", help="Update resolution status.", options=["Open", "Investigating", "Parts Ordered", "Resolved"], required=True),
-                        "Owner": st.column_config.TextColumn("Assigned To")
-                    },
-                    hide_index=True,
-                    use_container_width=True
-                )
-            else:
-                st.info("No active alerts to triage.")
+            # --- 4. Top Impacted Entities ---
+            st.markdown("### Top Impacted Entities")
+            t1, t2, t3 = st.columns(3)
+            with t1:
+                st.markdown("**Top Tools**")
+                st.dataframe(df['Tool'].value_counts().head(5).reset_index().rename(columns={'count':'Alerts', 'Tool':'Tooling ID'}), use_container_width=True, hide_index=True)
+            with t2:
+                st.markdown("**Top Plants**")
+                st.dataframe(df['Plant'].value_counts().head(5).reset_index().rename(columns={'count':'Alerts', 'Plant':'Plant Name'}), use_container_width=True, hide_index=True)
+            with t3:
+                st.markdown("**Top Suppliers**")
+                st.dataframe(df['Supplier'].value_counts().head(5).reset_index().rename(columns={'count':'Alerts', 'Supplier':'Supplier Name'}), use_container_width=True, hide_index=True)
 
         with cat_tabs[1]: # Cycle Time
             render_alert_hierarchy(df[df['Alert Type'] == 'Cycle Time'], "Cycle Time")
