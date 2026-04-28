@@ -890,9 +890,9 @@ elif page == "Client Alerts Portal":
             kpi4.markdown(f"<div class='metric-card'><div class='metric-title'>Impacted Suppliers</div><div class='metric-value'>{df['Supplier'].nunique()}</div></div>", unsafe_allow_html=True)
             kpi5.markdown(f"<div class='metric-card'><div class='metric-title'>OEM Divisions</div><div class='metric-value'>{df['OEM Division'].nunique()}</div></div>", unsafe_allow_html=True)
 
-            # --- 2. Visualizations ---
-            st.markdown("#### 📈 Alert Distributions")
-            v1, v2, v3, v4 = st.columns(4)
+            # --- 2. High-Level Distributions ---
+            st.markdown("#### 📈 High-Level Distributions")
+            v1, v2, v3 = st.columns(3)
 
             with v1:
                 st.markdown("**By Severity**")
@@ -916,45 +916,29 @@ elif page == "Client Alerts Portal":
                 st.markdown("**By Frequency**")
                 st.bar_chart(df['Frequency'].value_counts())
 
-            with v4:
-                st.markdown("**By OEM Division**")
-                st.bar_chart(df['OEM Division'].value_counts())
-
             st.divider()
 
-            # --- 3. Trend Analysis ---
-            st.markdown("#### 📉 Alert Generation Trends")
-            if not df.empty:
-                trend_df = df.copy()
-                trend_df['Date'] = pd.to_datetime(trend_df['Date/Time']).dt.date
-                trend_data = trend_df.groupby(['Date', 'Severity']).size().unstack(fill_value=0)
-                st.line_chart(trend_data)
-            else:
-                st.info("No data available for trend analysis.")
-
-            st.divider()
-
-            # --- Detailed Category Breakdowns ---
-            st.markdown("#### 📑 Detailed Category Breakdowns")
+            # --- 3. Alert Distribution Dashboards ---
+            st.markdown("#### 📊 Alert Distribution Dashboards")
             
             c1, c2 = st.columns(2)
             
             with c1:
-                st.markdown("**1. Cycle Time**")
+                st.markdown("**Cycle Time**")
                 ct_df = df[df['Alert Type'] == 'Cycle Time']
                 st.dataframe(pd.DataFrame([
                     {"Level": "Level 1", "Definition (Deviation)": "> 0% and ≤ 5%", "Tool Count": len(ct_df[ct_df['Severity'] == 'Level 1'])},
                     {"Level": "Level 2", "Definition (Deviation)": "> 5% and ≤ 15%", "Tool Count": len(ct_df[ct_df['Severity'] == 'Level 2'])}
                 ]), hide_index=True, use_container_width=True)
                 
-                st.markdown("**2. Run Rate Shot Efficiency**")
+                st.markdown("**Run Rate Efficiency**")
                 rr_eff_df = df[df['Alert Type'] == 'Low Run Rate - Shot Efficiency']
                 st.dataframe(pd.DataFrame([
                     {"Level": "Level 1", "Definition (Efficiency)": "75% ≤ rate < 85%", "Tool Count": len(rr_eff_df[rr_eff_df['Severity'] == 'Level 1'])},
                     {"Level": "Level 2", "Definition (Efficiency)": "60% ≤ rate < 75%", "Tool Count": len(rr_eff_df[rr_eff_df['Severity'] == 'Level 2'])}
                 ]), hide_index=True, use_container_width=True)
 
-                st.markdown("**3. Loss vs. Optimal Capacity**")
+                st.markdown("**Capacity Risk: Loss vs. Optimal Capacity**")
                 cr_opt_df = df[df['Alert Type'] == 'Capacity Risk (Optimal)']
                 st.dataframe(pd.DataFrame([
                     {"Level": "Level 1", "Definition (Loss %)": "> 0% and ≤ 5%", "Tool Count": len(cr_opt_df[cr_opt_df['Severity'] == 'Level 1'])},
@@ -962,28 +946,28 @@ elif page == "Client Alerts Portal":
                 ]), hide_index=True, use_container_width=True)
 
             with c2:
-                st.markdown("**4. Run Rate Time Stability**")
+                st.markdown("**Run Rate Stability**")
                 rr_stab_df = df[df['Alert Type'] == 'Low Run Rate - Time Stability']
                 st.dataframe(pd.DataFrame([
                     {"Level": "Level 1", "Definition (Stability)": "75% ≤ rate < 85%", "Tool Count": len(rr_stab_df[rr_stab_df['Severity'] == 'Level 1'])},
                     {"Level": "Level 2", "Definition (Stability)": "60% ≤ rate < 75%", "Tool Count": len(rr_stab_df[rr_stab_df['Severity'] == 'Level 2'])}
                 ]), hide_index=True, use_container_width=True)
 
-                st.markdown("**5. Loss vs. Target Capacity**")
+                st.markdown("**Capacity Risk: Loss vs. Target Capacity**")
                 cr_tgt_df = df[df['Alert Type'] == 'Capacity Risk (Target)']
                 st.dataframe(pd.DataFrame([
                     {"Level": "Level 1", "Definition (Loss %)": "> 0% and ≤ 5%", "Tool Count": len(cr_tgt_df[cr_tgt_df['Severity'] == 'Level 1'])},
                     {"Level": "Level 2", "Definition (Loss %)": "> 5% and ≤ 10%", "Tool Count": len(cr_tgt_df[cr_tgt_df['Severity'] == 'Level 2'])}
                 ]), hide_index=True, use_container_width=True)
 
-                st.markdown("**6. Tooling End of Life**")
+                st.markdown("**Tooling End of Life**")
                 eol_df = df[df['Alert Type'].str.contains('EOL')]
                 st.dataframe(pd.DataFrame([
                     {"Level": "Level 1", "Utilization Rate": "80% - 90%", "Remaining Days": "11 - 30 days", "Tool Count": len(eol_df[eol_df['Severity'] == 'Level 1'])},
                     {"Level": "Level 2", "Utilization Rate": "> 90%", "Remaining Days": "≤ 10 days", "Tool Count": len(eol_df[eol_df['Severity'] == 'Level 2'])}
                 ]), hide_index=True, use_container_width=True)
 
-            st.markdown("**7. Operation Status**")
+            st.markdown("**Operation Status**")
             os_df = df[df['Alert Type'].str.contains('Operation Status')]
             
             c_os1, c_os2 = st.columns([1, 1])
