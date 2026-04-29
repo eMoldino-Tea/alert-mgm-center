@@ -41,7 +41,7 @@ if 'admin_log' not in st.session_state:
 if 'client_alerts_db' not in st.session_state:
     mock_data = []
     distributions = [
-        ("Cycle Time", [("Level 1", 45, "4%"), ("Level 2", 14, "10%"), ("Level 3", 5, "18%")]),
+        ("Cycle Time", [("Level 1", 45, "8%"), ("Level 2", 14, "12%"), ("Level 3", 5, "18%")]),
         ("Low Run Rate - Shot Efficiency", [("Level 1", 50, "80%"), ("Level 2", 22, "70%"), ("Level 3", 8, "55%")]),
         ("Low Run Rate - Time Stability", [("Level 1", 60, "82%"), ("Level 2", 15, "65%"), ("Level 3", 4, "50%")]),
         ("Capacity Risk (Optimal)", [("Level 1", 80, "4%"), ("Level 2", 12, "10%"), ("Level 3", 3, "18%")]),
@@ -555,13 +555,16 @@ if page == "Configuration Management":
                         ct_limits.append(val)
                         prev_val = val
                 st.markdown("##### Alert Conditions Summary")
+                st.info(f"Production is considered **Healthy** when deviation is between **0% and {ct_limits[0]}%**. No alerts will be generated in this zone.")
                 ct_disp_cols = st.columns(ct_num)
                 for i in range(ct_num):
                     with ct_disp_cols[i]:
-                        lower = 0 if i == 0 else ct_limits[i-1]
-                        upper = ct_limits[i]
-                        op = "≤" if i == 0 else "<"
-                        txt = f"**Level {i+1}**\n\nTriggers when absolute deviation is between **{lower}% and {upper}%**.\n\n`(CT exceeds Target by ±{lower}% to ±{upper}%)`"
+                        lower = ct_limits[i]
+                        if i < ct_num - 1:
+                            upper = ct_limits[i+1]
+                            txt = f"**Level {i+1}**\n\nTriggers when absolute deviation is between **{lower}% and {upper}%**.\n\n`(±{lower}% < deviation ≤ ±{upper}%)`"
+                        else:
+                            txt = f"**Level {i+1}**\n\nTriggers when absolute deviation is strictly greater than **{lower}%**.\n\n`(deviation > ±{lower}%)`"
                         display_level_box(i, txt)
                 st.divider()
                 ct_freq = st.selectbox("Alert Frequency", ["Hourly", "Daily", "Weekly", "Monthly"], key="ct_freq")
@@ -1084,7 +1087,7 @@ elif page == "Client Alerts Portal":
             ct_df = df[df['Alert Type'] == 'Cycle Time']
             render_interactive_bar(ct_df, "Cycle Time Deviations")
             with st.expander("Definitions & Thresholds"):
-                st.markdown("- **Level 1:** > 0% and ≤ 5% deviation\n- **Level 2:** > 5% and ≤ 15% deviation\n- **Level 3:** > 15% deviation")
+                st.markdown("- **Level 1:** > 5% and ≤ 10% deviation\n- **Level 2:** > 10% and ≤ 15% deviation\n- **Level 3:** > 15% deviation")
             
             st.markdown("##### Low Run Rate Time Stability")
             rr_stab_df = df[df['Alert Type'] == 'Low Run Rate - Time Stability']
