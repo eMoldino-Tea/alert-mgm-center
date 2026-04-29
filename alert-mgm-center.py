@@ -697,10 +697,10 @@ def delete_config_popup(config_id):
 # ==========================================
 with st.sidebar:
     st.markdown("### Navigation")
-    page = st.radio("Go to:", ["Configuration Management", "Global Dashboard", "Client Alerts Portal"])
+    page = st.radio("Go to:", ["Configuration Setup", "Configuration Management", "Client Alerts Portal"])
     st.divider()
 
-    if page == "Configuration Management":
+    if page == "Configuration Setup":
         st.markdown("### User Assignment")
         selected_server = st.selectbox("Target Server", list(MOCK_USERS.keys()))
         
@@ -722,12 +722,12 @@ with st.sidebar:
 #              MAIN CONTENT
 # ==========================================
 
-if page == "Configuration Management":
+if page == "Configuration Setup":
     # Top Header & Export Button
     header_col, export_col = st.columns([5, 1])
 
     with header_col:
-        st.markdown('<div class="main-header">Alert Configuration Management</div>', unsafe_allow_html=True)
+        st.markdown('<div class="main-header">Alert Configuration Setup</div>', unsafe_allow_html=True)
         st.markdown('<div class="sub-header">eMoldino Service Center | Manage alert configurations centrally.</div>', unsafe_allow_html=True)
         
     with export_col:
@@ -990,8 +990,8 @@ if page == "Configuration Management":
 # ==========================================
 #        GLOBAL CONFIGURATIONS DASHBOARD
 # ==========================================
-elif page == "Global Dashboard":
-    st.markdown('<div class="main-header">Global Configurations Dashboard</div>', unsafe_allow_html=True)
+elif page == "Configuration Management":
+    st.markdown('<div class="main-header">Configuration Management</div>', unsafe_allow_html=True)
     st.markdown('<div class="sub-header">A comprehensive view of all active alert configurations across all servers and user groups.</div>', unsafe_allow_html=True)
     st.write("")
 
