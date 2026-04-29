@@ -982,22 +982,50 @@ elif page == "Global Dashboard":
     if st.session_state.admin_log.empty:
         st.info("No configurations have been applied yet in this session.")
     else:
+        display_df = st.session_state.admin_log.copy()
+        
+        def simplify_alert_type(t):
+            if "Cycle Time" in t: return "Cycle Time"
+            if "Run Rate" in t: return "Run Rate"
+            if "Capacity Risk" in t: return "Capacity Risk"
+            if "End of Life" in t or "EOL" in t: return "Tooling End of Life"
+            if "Operation Status" in t: return "Operation Status"
+            return t
+            
+        def summarize_users(u):
+            ulist = [x.strip() for x in str(u).split(",") if x.strip()]
+            if len(ulist) > 1: return f"{ulist[0]} (+{len(ulist)-1} more)"
+            return u
+            
+        def summarize_filters(f):
+            if f == "Global (No filters applied)": return f
+            flist = [x.strip() for x in str(f).split("|") if x.strip()]
+            if len(flist) > 1: return f"{flist[0]} (+{len(flist)-1} more)"
+            if len(str(f)) > 50: return str(f)[:47] + "..."
+            return f
+        
+        display_df['Display Alert Type'] = display_df['Alert Type'].apply(simplify_alert_type)
+        
         st.markdown("##### 🔍 Active Configurations")
         f_col1, f_col2, f_col3 = st.columns(3)
         with f_col1:
-            server_filter = st.multiselect("Filter by Server", options=st.session_state.admin_log['Server'].unique(), default=[])
+            server_filter = st.multiselect("Filter by Server", options=display_df['Server'].unique(), default=[])
         with f_col2:
-            alert_filter = st.multiselect("Filter by Alert Type", options=st.session_state.admin_log['Alert Type'].unique(), default=[])
+            alert_filter = st.multiselect("Filter by Alert Type", options=display_df['Display Alert Type'].unique(), default=[])
         st.divider()
         
-        display_df = st.session_state.admin_log.copy()
         if server_filter: display_df = display_df[display_df['Server'].isin(server_filter)]
-        if alert_filter: display_df = display_df[display_df['Alert Type'].isin(alert_filter)]
+        if alert_filter: display_df = display_df[display_df['Display Alert Type'].isin(alert_filter)]
         
         st.write("👆 **Click on any row in the table below to view, edit, or delete its configuration.**")
         
-        # Hide the Config Payload dictionary from the visual table rendering
-        table_display = display_df.drop(columns=['Config Payload'])
+        # Prepare the visual table rendering
+        table_display = display_df.copy()
+        table_display['Alert Type'] = table_display['Display Alert Type']
+        table_display['Users'] = table_display['Users'].apply(summarize_users)
+        table_display['Target Scope (Filters)'] = table_display['Target Scope (Filters)'].apply(summarize_filters)
+        table_display = table_display.drop(columns=['Config Payload', 'Display Alert Type'])
+        table_display = table_display[['Config ID', 'Timestamp', 'Server', 'Users', 'Alert Type', 'Target Scope (Filters)']]
         
         try:
             event = st.dataframe(
