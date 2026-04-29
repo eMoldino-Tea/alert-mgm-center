@@ -32,10 +32,10 @@ except ImportError:
     MATPLOTLIB_AVAILABLE = False
 
 # --- SESSION STATE INITIALIZATION ---
-# Re-init if Config ID is missing from a previous session load
-if 'admin_log' not in st.session_state or "Config ID" not in st.session_state.admin_log.columns:
+# Re-init if Config ID is missing from a previous session load, or if outdated columns exist
+if 'admin_log' not in st.session_state or "Config ID" not in st.session_state.admin_log.columns or "Configuration details" in st.session_state.admin_log.columns:
     st.session_state.admin_log = pd.DataFrame(columns=[
-        "Config ID", "Timestamp", "Server", "Users", "Alert Type", "Target Scope (Filters)", "Configuration details"
+        "Config ID", "Timestamp", "Server", "Users", "Alert Type", "Target Scope (Filters)"
     ])
 
 # Initialize robust mock client alerts to perfectly populate the 3-Tier chart visualizations
@@ -457,7 +457,7 @@ def render_filters(key_prefix):
             
     return {"OEM": oem, "Supplier": sup, "Plant": plt, "Product": prod, "Tooling Type": ttype, "Part": part, "Tooling": tool}
 
-def log_admin_action(alert_type, filters, selected_server, selected_users, details="Configured successfully"):
+def log_admin_action(alert_type, filters, selected_server, selected_users):
     if not selected_users:
         st.error("⚠️ Please select at least one user from the User Assignment panel before saving.")
         return
@@ -475,8 +475,7 @@ def log_admin_action(alert_type, filters, selected_server, selected_users, detai
         "Server": selected_server,
         "Users": users_str,
         "Alert Type": alert_type,
-        "Target Scope (Filters)": filter_str,
-        "Configuration details": details
+        "Target Scope (Filters)": filter_str
     }])
     st.session_state.admin_log = pd.concat([new_log, st.session_state.admin_log], ignore_index=True)
     st.success(f"Successfully programmed '{alert_type}' alert for {len(selected_users)} user(s) on {selected_server}!")
@@ -488,7 +487,6 @@ def edit_config_popup(config_id, row_data):
     
     new_server = st.selectbox("Target Server", ["JLR Server", "GM Server", "Paccar Server"], index=["JLR Server", "GM Server", "Paccar Server"].index(row_data['Server']))
     new_users = st.text_input("Assigned Users (comma separated)", value=row_data['Users'])
-    new_details = st.text_area("Configuration Details", value=row_data['Configuration details'])
     
     if st.button("Save Changes", type="primary", use_container_width=True):
         if not new_users.strip():
@@ -497,7 +495,6 @@ def edit_config_popup(config_id, row_data):
             idx = st.session_state.admin_log.index[st.session_state.admin_log['Config ID'] == config_id].tolist()[0]
             st.session_state.admin_log.at[idx, 'Server'] = new_server
             st.session_state.admin_log.at[idx, 'Users'] = new_users
-            st.session_state.admin_log.at[idx, 'Configuration details'] = new_details
             st.session_state.admin_log.at[idx, 'Timestamp'] = datetime.datetime.now().strftime("%Y-%m-%d %H:%M:%S") + " (Edited)"
             st.rerun()
 
@@ -782,7 +779,7 @@ if page == "Configuration Management":
                 st.divider()
                 eol_freq = st.selectbox("Alert Frequency", ["Daily", "Weekly", "Monthly"], key="eol_freq")
             if st.button("Save Tooling EOL Settings", type="primary"):
-                log_admin_action("Tooling End of Life", user_filters, selected_server, selected_users, details=f"Mode: {eol_mode}")
+                log_admin_action("Tooling End of Life", user_filters, selected_server, selected_users)
 
     # --- 5. OPERATION STATUS ---
     with tab5:
@@ -815,7 +812,7 @@ elif page == "Global Dashboard":
     if st.session_state.admin_log.empty:
         st.info("No configurations have been applied yet in this session.")
     else:
-        st.markdown("##### 🔍 Filter Configurations")
+        st.markdown("##### 🔍 Active Configurations")
         f_col1, f_col2, f_col3 = st.columns(3)
         with f_col1:
             server_filter = st.multiselect("Filter by Server", options=st.session_state.admin_log['Server'].unique(), default=[])
@@ -827,38 +824,49 @@ elif page == "Global Dashboard":
         if server_filter: display_df = display_df[display_df['Server'].isin(server_filter)]
         if alert_filter: display_df = display_df[display_df['Alert Type'].isin(alert_filter)]
         
-        st.dataframe(display_df, use_container_width=True, hide_index=True)
+        st.write("👆 **Click on any row in the table below to view, edit, or delete its configuration.**")
         
-        # --- Management Panel ---
-        st.markdown("### ⚙️ Manage Configurations")
-        if not display_df.empty:
+        try:
+            event = st.dataframe(
+                display_df, 
+                use_container_width=True, 
+                hide_index=True, 
+                on_select="rerun", 
+                selection_mode="single-row"
+            )
+            selected_rows = event.selection.rows
+        except Exception:
+            # Fallback for Streamlit versions < 1.35
+            st.dataframe(display_df, use_container_width=True, hide_index=True)
+            st.markdown("### ⚙️ Select a Configuration")
             selected_config_id = st.selectbox(
                 "Select a configuration to View, Edit, or Delete:", 
                 display_df['Config ID'].tolist(),
-                format_func=lambda x: f"{x} | {display_df[display_df['Config ID'] == x]['Alert Type'].values[0]} on {display_df[display_df['Config ID'] == x]['Server'].values[0]}"
+                format_func=lambda x: f"{x} | {display_df[display_df['Config ID'] == x]['Alert Type'].values[0]}"
             )
+            selected_rows = [display_df.reset_index().index[display_df['Config ID'] == selected_config_id].tolist()[0]] if selected_config_id else []
+
+        if selected_rows:
+            sel_row = display_df.iloc[selected_rows[0]]
+            selected_config_id = sel_row['Config ID']
             
-            if selected_config_id:
-                sel_row = display_df[display_df['Config ID'] == selected_config_id].iloc[0]
+            with st.container(border=True):
+                st.markdown(f"#### Configuration Details: `{selected_config_id}`")
+                col1, col2 = st.columns(2)
+                col1.write(f"**Alert Type:** {sel_row['Alert Type']}")
+                col1.write(f"**Server:** {sel_row['Server']}")
+                col1.write(f"**Assigned Users:** {sel_row['Users']}")
+                col2.write(f"**Target Scope (Filters):** {sel_row['Target Scope (Filters)']}")
+                col2.write(f"**Last Updated:** {sel_row['Timestamp']}")
                 
-                with st.container(border=True):
-                    st.markdown(f"#### Configuration Details: `{selected_config_id}`")
-                    col1, col2 = st.columns(2)
-                    col1.write(f"**Alert Type:** {sel_row['Alert Type']}")
-                    col1.write(f"**Server:** {sel_row['Server']}")
-                    col1.write(f"**Assigned Users:** {sel_row['Users']}")
-                    col2.write(f"**Target Scope (Filters):** {sel_row['Target Scope (Filters)']}")
-                    col2.write(f"**Details:** {sel_row['Configuration details']}")
-                    col2.write(f"**Last Updated:** {sel_row['Timestamp']}")
+                st.divider()
+                bc1, bc2, bc3 = st.columns([1, 1, 4])
+                
+                if bc1.button("✏️ Edit", key=f"edit_{selected_config_id}", use_container_width=True):
+                    edit_config_popup(selected_config_id, sel_row)
                     
-                    st.divider()
-                    bc1, bc2, bc3 = st.columns([1, 1, 4])
-                    
-                    if bc1.button("✏️ Edit", key=f"edit_{selected_config_id}", use_container_width=True):
-                        edit_config_popup(selected_config_id, sel_row)
-                        
-                    if bc2.button("🗑️ Delete", key=f"del_{selected_config_id}", use_container_width=True):
-                        delete_config_popup(selected_config_id)
+                if bc2.button("🗑️ Delete", key=f"del_{selected_config_id}", use_container_width=True):
+                    delete_config_popup(selected_config_id)
 
 # ==========================================
 #        CLIENT ALERTS PORTAL
