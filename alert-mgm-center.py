@@ -783,7 +783,7 @@ elif page == "Client Alerts Portal":
         if client_filters.get("Part"): df = df[df['Part'].isin(client_filters["Part"])]
         if client_filters.get("Tooling"): df = df[df['Tool'].isin(client_filters["Tooling"])]
         
-        search_query = st.text_input("🔍 Search (Tool, Part, Name)")
+        search_query = st.text_input("🔍 Search (Tooling ID, Part ID, Part Name)")
         if search_query:
             df = df[df.apply(lambda row: row.astype(str).str.contains(search_query, case=False).any(), axis=1)]
 
