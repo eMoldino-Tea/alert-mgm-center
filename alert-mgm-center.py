@@ -33,9 +33,9 @@ except ImportError:
 
 # --- SESSION STATE INITIALIZATION ---
 # Re-init if Config ID is missing from a previous session load, or if outdated columns exist
-if 'admin_log' not in st.session_state or "Config ID" not in st.session_state.admin_log.columns or "Configuration details" in st.session_state.admin_log.columns:
+if 'admin_log' not in st.session_state or "Config ID" not in st.session_state.admin_log.columns or "Configuration details" in st.session_state.admin_log.columns or "Config Payload" not in st.session_state.admin_log.columns:
     st.session_state.admin_log = pd.DataFrame(columns=[
-        "Config ID", "Timestamp", "Server", "Users", "Alert Type", "Target Scope (Filters)"
+        "Config ID", "Timestamp", "Server", "Users", "Alert Type", "Target Scope (Filters)", "Config Payload"
     ])
 
 # Initialize robust mock client alerts to perfectly populate the 3-Tier chart visualizations
@@ -457,7 +457,7 @@ def render_filters(key_prefix):
             
     return {"OEM": oem, "Supplier": sup, "Plant": plt, "Product": prod, "Tooling Type": ttype, "Part": part, "Tooling": tool}
 
-def log_admin_action(alert_type, filters, selected_server, selected_users):
+def log_admin_action(alert_type, filters, selected_server, selected_users, config_payload=None):
     if not selected_users:
         st.error("⚠️ Please select at least one user from the User Assignment panel before saving.")
         return
@@ -475,19 +475,184 @@ def log_admin_action(alert_type, filters, selected_server, selected_users):
         "Server": selected_server,
         "Users": users_str,
         "Alert Type": alert_type,
-        "Target Scope (Filters)": filter_str
+        "Target Scope (Filters)": filter_str,
+        "Config Payload": config_payload if config_payload else {}
     }])
     st.session_state.admin_log = pd.concat([new_log, st.session_state.admin_log], ignore_index=True)
     st.success(f"Successfully programmed '{alert_type}' alert for {len(selected_users)} user(s) on {selected_server}!")
 
+def render_payload_details(alert_type, payload):
+    if not payload:
+        st.write("No detailed thresholds recorded for this configuration.")
+        return
+        
+    st.write(f"**Frequency:** {payload.get('freq', 'N/A')}")
+    
+    if "Cycle Time" in alert_type:
+        st.write(f"**Levels Configured:** {payload.get('levels')}")
+        limits = payload.get('limits', [])
+        for i, limit in enumerate(limits):
+            if i < len(limits) - 1:
+                st.write(f"- **Level {i+1}:** ±{limit}% < deviation ≤ ±{limits[i+1]}%")
+            else:
+                st.write(f"- **Level {i+1}:** > ±{limit}%")
+    
+    elif "Run Rate" in alert_type:
+        st.write(f"**No Alert Zone:** ≥ {payload.get('no_alert')}%")
+        st.write(f"**Levels Configured:** {payload.get('levels')}")
+        limits = payload.get('limits', [])
+        for i, limit in enumerate(limits):
+            upper = payload.get('no_alert') if i == 0 else limits[i-1]
+            st.write(f"- **Level {i+1}:** {limit}% ≤ rate < {upper}%")
+            
+    elif "Capacity Risk" in alert_type:
+        if "Target" in alert_type:
+            st.write(f"**Target Capacity Output:** {payload.get('target_cap')}%")
+        st.write(f"**Levels Configured:** {payload.get('levels')}")
+        limits = payload.get('limits', [])
+        for i, limit in enumerate(limits):
+            lower = 0 if i == 0 else limits[i-1]
+            st.write(f"- **Level {i+1}:** {lower}% < loss ≤ {limit}%")
+            
+    elif "Tooling End of Life" in alert_type:
+        st.write(f"**Evaluation Mode:** {payload.get('mode')}")
+        st.write(f"**Levels Configured:** {payload.get('levels')}")
+        show_util = "Utilization" in payload.get('mode', '') or "Combination" in payload.get('mode', '')
+        show_days = "Days" in payload.get('mode', '') or "Combination" in payload.get('mode', '')
+        
+        for i in range(payload.get('levels', 1)):
+            conds = []
+            if show_util:
+                u_lims = payload.get('util_limits', [])
+                lower = payload.get('base') if i == 0 else u_lims[i-1]
+                upper = u_lims[i] if i < len(u_lims) else 'MAX'
+                conds.append(f"Shots: {lower}% to {upper}%")
+            if show_days:
+                d_lims = payload.get('days_limits', [])
+                upper_d = 365 if i == 0 else d_lims[i-1]
+                lower_d = d_lims[i] if i < len(d_lims) else 0
+                conds.append(f"Days left: {lower_d} to {upper_d}")
+            st.write(f"- **Level {i+1}:** " + " OR ".join(conds))
+            
+    elif "Operation Status" in alert_type:
+        st.write(f"**Tool Starts Producing Alert:** {'Enabled' if payload.get('producing') else 'Disabled'}")
+        st.write(f"**Tool Stops Alert:** {'Enabled' if payload.get('stops') else 'Disabled'}")
+        st.write(f"**Connectivity Triggers:** {', '.join(payload.get('triggers', []))}")
+
+
+def edit_thresholds(alert_type, payload, config_id):
+    new_payload = payload.copy()
+    st.markdown("##### ⚙️ Alert Thresholds")
+    
+    if "Cycle Time" in alert_type:
+        new_payload['levels'] = st.number_input("Levels", 1, 5, payload.get('levels', 2), key=f"e_ct_lvl_{config_id}")
+        cols = st.columns(new_payload['levels'])
+        new_limits = []
+        prev_val = 0
+        for i in range(new_payload['levels']):
+            with cols[i]:
+                def_val = payload.get('limits', [])[i] if i < len(payload.get('limits', [])) else prev_val + 5
+                c_min = min(200, prev_val + 1)
+                def_val = max(def_val, c_min)
+                val = st.number_input(f"Level {i+1} Limit (%)", min_value=c_min, max_value=200, value=def_val, key=f"e_ct_lim_{config_id}_{i}")
+                new_limits.append(val)
+                prev_val = val
+        new_payload['limits'] = new_limits
+        new_payload['freq'] = st.selectbox("Frequency", ["Hourly", "Daily", "Weekly", "Monthly"], index=["Hourly", "Daily", "Weekly", "Monthly"].index(payload.get('freq', 'Daily')), key=f"e_ct_fq_{config_id}")
+    
+    elif "Run Rate" in alert_type:
+        new_payload['no_alert'] = st.number_input("No Alert Zone (%)", 1, 100, payload.get('no_alert', 85), key=f"e_rr_na_{config_id}")
+        new_payload['levels'] = st.number_input("Levels", 1, 5, payload.get('levels', 2), key=f"e_rr_lvl_{config_id}")
+        cols = st.columns(new_payload['levels'])
+        new_limits = []
+        prev_val = new_payload['no_alert']
+        for i in range(new_payload['levels']):
+            with cols[i]:
+                def_val = payload.get('limits', [])[i] if i < len(payload.get('limits', [])) else max(0, prev_val - 15)
+                c_max = max(0, prev_val - 1)
+                def_val = min(def_val, c_max)
+                val = st.number_input(f"Level {i+1} Limit (%)", min_value=0, max_value=c_max, value=def_val, key=f"e_rr_lim_{config_id}_{i}")
+                new_limits.append(val)
+                prev_val = val
+        new_payload['limits'] = new_limits
+        new_payload['freq'] = st.selectbox("Frequency", ["Daily", "Weekly", "Monthly"], index=["Daily", "Weekly", "Monthly"].index(payload.get('freq', 'Daily')), key=f"e_rr_fq_{config_id}")
+        
+    elif "Capacity Risk" in alert_type:
+        if "Target" in alert_type:
+            new_payload['target_cap'] = st.number_input("Target Capacity (%)", 1, 100, payload.get('target_cap', 90), key=f"e_cr_tgt_{config_id}")
+        new_payload['levels'] = st.number_input("Levels", 1, 5, payload.get('levels', 2), key=f"e_cr_lvl_{config_id}")
+        cols = st.columns(new_payload['levels'])
+        new_limits = []
+        prev_val = 0
+        for i in range(new_payload['levels']):
+            with cols[i]:
+                def_val = payload.get('limits', [])[i] if i < len(payload.get('limits', [])) else prev_val + 10
+                c_min = min(100, prev_val + 1)
+                def_val = max(def_val, c_min)
+                val = st.number_input(f"Level {i+1} Limit (%)", min_value=c_min, max_value=100, value=def_val, key=f"e_cr_lim_{config_id}_{i}")
+                new_limits.append(val)
+                prev_val = val
+        new_payload['limits'] = new_limits
+        new_payload['freq'] = st.selectbox("Frequency", ["Daily", "Weekly", "Monthly"], index=["Daily", "Weekly", "Monthly"].index(payload.get('freq', 'Daily')), key=f"e_cr_fq_{config_id}")
+        
+    elif "Tooling End of Life" in alert_type:
+        new_payload['mode'] = st.radio("Evaluation Mode", ["Utilization Rate (%)", "Remaining Days", "Combination (Whichever comes first)"], index=["Utilization Rate (%)", "Remaining Days", "Combination (Whichever comes first)"].index(payload.get('mode', "Utilization Rate (%)")), key=f"e_eol_mod_{config_id}")
+        new_payload['levels'] = st.number_input("Levels", 1, 5, payload.get('levels', 2), key=f"e_eol_lvl_{config_id}")
+        
+        show_util = "Utilization" in new_payload['mode'] or "Combination" in new_payload['mode']
+        show_days = "Days" in new_payload['mode'] or "Combination" in new_payload['mode']
+        
+        new_util_limits, new_days_limits = [], []
+        if show_util:
+            new_payload['base'] = st.number_input("Start Monitoring At (%)", 0, 99, payload.get('base', 80), key=f"e_eol_base_{config_id}")
+            cols = st.columns(new_payload['levels'])
+            prev_val = new_payload['base']
+            for i in range(new_payload['levels']):
+                with cols[i]:
+                    def_val = payload.get('util_limits', [])[i] if i < len(payload.get('util_limits', [])) else prev_val + 10
+                    c_min = min(200, prev_val + 1)
+                    def_val = max(def_val, c_min)
+                    val = st.number_input(f"L{i+1} Util Limit (%)", min_value=c_min, max_value=200, value=def_val, key=f"e_eol_ulim_{config_id}_{i}")
+                    new_util_limits.append(val)
+                    prev_val = val
+            new_payload['util_limits'] = new_util_limits
+            
+        if show_days:
+            cols = st.columns(new_payload['levels'])
+            prev_val = 365
+            for i in range(new_payload['levels']):
+                with cols[i]:
+                    def_val = payload.get('days_limits', [])[i] if i < len(payload.get('days_limits', [])) else max(0, prev_val - 15)
+                    c_max = max(0, prev_val - 1)
+                    def_val = min(def_val, c_max)
+                    val = st.number_input(f"L{i+1} Days Limit", min_value=0, max_value=c_max, value=def_val, key=f"e_eol_dlim_{config_id}_{i}")
+                    new_days_limits.append(val)
+                    prev_val = val
+            new_payload['days_limits'] = new_days_limits
+            
+        new_payload['freq'] = st.selectbox("Frequency", ["Daily", "Weekly", "Monthly"], index=["Daily", "Weekly", "Monthly"].index(payload.get('freq', 'Daily')), key=f"e_eol_fq_{config_id}")
+
+    elif "Operation Status" in alert_type:
+        new_payload['producing'] = st.checkbox("Tool Starts Producing", value=payload.get('producing', True), key=f"e_os_p_{config_id}")
+        new_payload['stops'] = st.checkbox("Tool Stops", value=payload.get('stops', False), key=f"e_os_s_{config_id}")
+        new_payload['triggers'] = st.multiselect("Connectivity Triggers", ["Sensor offline", "Inactive", "Sensor detached"], default=payload.get('triggers', ["Sensor offline"]), key=f"e_os_t_{config_id}")
+        new_payload['freq'] = st.selectbox("Frequency", ["Daily", "Weekly", "Monthly", "Real time"], index=["Daily", "Weekly", "Monthly", "Real time"].index(payload.get('freq', 'Real time')), key=f"e_os_f_{config_id}")
+
+    return new_payload
+
 # --- EDIT AND DELETE DIALOGS (GLOBAL DASHBOARD) ---
-@st.dialog("✏️ Edit Configuration")
+@st.dialog("✏️ Edit Configuration", width="large")
 def edit_config_popup(config_id, row_data):
     st.write(f"Editing settings for **{config_id}**")
-    
+    st.markdown("##### General Settings")
     new_server = st.selectbox("Target Server", ["JLR Server", "GM Server", "Paccar Server"], index=["JLR Server", "GM Server", "Paccar Server"].index(row_data['Server']))
     new_users = st.text_input("Assigned Users (comma separated)", value=row_data['Users'])
     
+    st.divider()
+    
+    new_payload = edit_thresholds(row_data['Alert Type'], row_data.get('Config Payload', {}), config_id)
+    
+    st.divider()
     if st.button("Save Changes", type="primary", use_container_width=True):
         if not new_users.strip():
             st.error("⚠️ Assigned Users cannot be empty.")
@@ -495,6 +660,7 @@ def edit_config_popup(config_id, row_data):
             idx = st.session_state.admin_log.index[st.session_state.admin_log['Config ID'] == config_id].tolist()[0]
             st.session_state.admin_log.at[idx, 'Server'] = new_server
             st.session_state.admin_log.at[idx, 'Users'] = new_users
+            st.session_state.admin_log.at[idx, 'Config Payload'] = new_payload
             st.session_state.admin_log.at[idx, 'Timestamp'] = datetime.datetime.now().strftime("%Y-%m-%d %H:%M:%S") + " (Edited)"
             st.rerun()
 
@@ -640,7 +806,7 @@ if page == "Configuration Management":
                 st.divider()
                 ct_freq = st.selectbox("Alert Frequency", ["Hourly", "Daily", "Weekly", "Monthly"], key="ct_freq")
             if st.button("Save Cycle Time Settings", type="primary"):
-                log_admin_action("Cycle Time", user_filters, selected_server, selected_users)
+                log_admin_action("Cycle Time", user_filters, selected_server, selected_users, {"levels": ct_num, "limits": ct_limits, "freq": ct_freq})
 
     # --- 2. RUN RATE ---
     with tab2:
@@ -680,10 +846,10 @@ if page == "Configuration Management":
                     st.divider()
                     rr_freq = st.selectbox("Alert Frequency", ["Daily", "Weekly", "Monthly"], key=f"{prefix}_freq")
                 if st.button(f"Save {rr_type} Settings", type="primary", key=f"{prefix}_save"):
-                    log_admin_action(f"Run Rate ({rr_type})", user_filters, selected_server, selected_users)
+                    log_admin_action(f"Low Run Rate - {rr_type}", user_filters, selected_server, selected_users, {"no_alert": no_alert_zone, "levels": rr_num, "limits": rr_limits, "freq": rr_freq})
 
-            with rr_tab1: render_run_rate_logic("Run Rate Shot Efficiency", "eff")
-            with rr_tab2: render_run_rate_logic("Run Rate Time Stability", "stab")
+            with rr_tab1: render_run_rate_logic("Shot Efficiency", "eff")
+            with rr_tab2: render_run_rate_logic("Time Stability", "stab")
 
     # --- 3. CAPACITY RISK ---
     with tab3:
@@ -693,6 +859,7 @@ if page == "Configuration Management":
             cr_tab1, cr_tab2 = st.tabs(["Lost parts vs Optimal Capacity", "Lost parts vs Target Capacity"])
             def render_capacity_logic(cr_type, prefix, is_target=False):
                 with st.container(border=True):
+                    target_cap = 100
                     if is_target:
                         target_cap = st.number_input("Target Capacity Output (%)", value=90, min_value=1, max_value=100, key=f"{prefix}_target")
                         st.info(f"Calculations will be evaluated against **{target_cap}%** capacity output.")
@@ -721,10 +888,12 @@ if page == "Configuration Management":
                     st.divider()
                     cr_freq = st.selectbox("Alert Frequency", ["Daily", "Weekly", "Monthly"], key=f"{prefix}_freq")
                 if st.button(f"Save {cr_type} Settings", type="primary", key=f"{prefix}_save"):
-                    log_admin_action(f"Capacity Risk ({cr_type})", user_filters, selected_server, selected_users)
+                    payload = {"levels": cr_num, "limits": cr_limits, "freq": cr_freq}
+                    if is_target: payload["target_cap"] = target_cap
+                    log_admin_action(f"Capacity Risk ({cr_type})", user_filters, selected_server, selected_users, payload)
 
-            with cr_tab1: render_capacity_logic("Optimal Capacity", "opt")
-            with cr_tab2: render_capacity_logic("Target Capacity", "tgt", is_target=True)
+            with cr_tab1: render_capacity_logic("Optimal", "opt")
+            with cr_tab2: render_capacity_logic("Target", "tgt", is_target=True)
 
     # --- 4. TOOLING END OF LIFE ---
     with tab4:
@@ -739,6 +908,7 @@ if page == "Configuration Management":
                 eol_num = st.number_input("How many alert levels do you want to configure?", min_value=1, max_value=5, value=2, key="eol_num_levels")
                 st.markdown("##### Threshold Boundaries")
                 util_limits, days_limits = [], []
+                base_start = None
                 if show_util:
                     base_start = st.number_input("Start Monitoring At (% of forecasted max shot)", min_value=0, max_value=99, value=80, key="eol_base")
                     prev_val = base_start
@@ -779,7 +949,7 @@ if page == "Configuration Management":
                 st.divider()
                 eol_freq = st.selectbox("Alert Frequency", ["Daily", "Weekly", "Monthly"], key="eol_freq")
             if st.button("Save Tooling EOL Settings", type="primary"):
-                log_admin_action("Tooling End of Life", user_filters, selected_server, selected_users)
+                log_admin_action("Tooling End of Life", user_filters, selected_server, selected_users, {"mode": eol_mode, "levels": eol_num, "util_limits": util_limits, "days_limits": days_limits, "base": base_start, "freq": eol_freq})
 
     # --- 5. OPERATION STATUS ---
     with tab5:
@@ -788,18 +958,18 @@ if page == "Configuration Management":
         if os_enabled:
             with st.container(border=True):
                 st.markdown("##### Real-Time Event Alerts")
-                st.checkbox("Tool Starts Producing", value=True)
+                os_producing = st.checkbox("Tool Starts Producing", value=True)
                 st.write("")
-                st.checkbox("Tool Stops", value=False)
+                os_stops = st.checkbox("Tool Stops", value=False)
                 st.divider()
                 st.markdown("##### Connectivity & Status-Based Alerts")
                 c1, c2 = st.columns(2)
                 with c1:
-                    st.multiselect("Trigger when tools remain in:", ["Sensor offline", "Inactive", "Sensor detached"], default=["Sensor offline"])
+                    os_triggers = st.multiselect("Trigger when tools remain in:", ["Sensor offline", "Inactive", "Sensor detached"], default=["Sensor offline"])
                 with c2:
-                    st.selectbox("Alert Frequency", ["Daily", "Weekly", "Monthly", "Real time"], index=3, key="os_freq")
+                    os_freq = st.selectbox("Alert Frequency", ["Daily", "Weekly", "Monthly", "Real time"], index=3, key="os_freq")
             if st.button("Save Operation Status Settings", type="primary"):
-                log_admin_action("Operation Status", user_filters, selected_server, selected_users)
+                log_admin_action("Operation Status", user_filters, selected_server, selected_users, {"producing": os_producing, "stops": os_stops, "triggers": os_triggers, "freq": os_freq})
 
 # ==========================================
 #        GLOBAL CONFIGURATIONS DASHBOARD
@@ -826,9 +996,12 @@ elif page == "Global Dashboard":
         
         st.write("👆 **Click on any row in the table below to view, edit, or delete its configuration.**")
         
+        # Hide the Config Payload dictionary from the visual table rendering
+        table_display = display_df.drop(columns=['Config Payload'])
+        
         try:
             event = st.dataframe(
-                display_df, 
+                table_display, 
                 use_container_width=True, 
                 hide_index=True, 
                 on_select="rerun", 
@@ -837,7 +1010,7 @@ elif page == "Global Dashboard":
             selected_rows = event.selection.rows
         except Exception:
             # Fallback for Streamlit versions < 1.35
-            st.dataframe(display_df, use_container_width=True, hide_index=True)
+            st.dataframe(table_display, use_container_width=True, hide_index=True)
             st.markdown("### ⚙️ Select a Configuration")
             selected_config_id = st.selectbox(
                 "Select a configuration to View, Edit, or Delete:", 
@@ -852,12 +1025,20 @@ elif page == "Global Dashboard":
             
             with st.container(border=True):
                 st.markdown(f"#### Configuration Details: `{selected_config_id}`")
+                
+                # --- Basic Details Section ---
                 col1, col2 = st.columns(2)
                 col1.write(f"**Alert Type:** {sel_row['Alert Type']}")
                 col1.write(f"**Server:** {sel_row['Server']}")
                 col1.write(f"**Assigned Users:** {sel_row['Users']}")
                 col2.write(f"**Target Scope (Filters):** {sel_row['Target Scope (Filters)']}")
                 col2.write(f"**Last Updated:** {sel_row['Timestamp']}")
+                
+                st.divider()
+                
+                # --- Advanced Threshold View Section ---
+                st.markdown("##### ⚙️ Alert Thresholds & Logic")
+                render_payload_details(sel_row['Alert Type'], sel_row.get('Config Payload', {}))
                 
                 st.divider()
                 bc1, bc2, bc3 = st.columns([1, 1, 4])
