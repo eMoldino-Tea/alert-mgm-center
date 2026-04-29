@@ -32,9 +32,10 @@ except ImportError:
     MATPLOTLIB_AVAILABLE = False
 
 # --- SESSION STATE INITIALIZATION ---
-if 'admin_log' not in st.session_state:
+# Re-init if Config ID is missing from a previous session load
+if 'admin_log' not in st.session_state or "Config ID" not in st.session_state.admin_log.columns:
     st.session_state.admin_log = pd.DataFrame(columns=[
-        "Timestamp", "Server", "Users", "Alert Type", "Target Scope (Filters)", "Configuration details"
+        "Config ID", "Timestamp", "Server", "Users", "Alert Type", "Target Scope (Filters)", "Configuration details"
     ])
 
 # Initialize robust mock client alerts to perfectly populate the 3-Tier chart visualizations
@@ -465,7 +466,11 @@ def log_admin_action(alert_type, filters, selected_server, selected_users, detai
     if not filter_str:
         filter_str = "Global (No filters applied)"
     users_str = ", ".join(selected_users)
+    
+    config_id = f"CFG-{random.randint(10000, 99999)}"
+    
     new_log = pd.DataFrame([{
+        "Config ID": config_id,
         "Timestamp": datetime.datetime.now().strftime("%Y-%m-%d %H:%M:%S"),
         "Server": selected_server,
         "Users": users_str,
@@ -475,6 +480,38 @@ def log_admin_action(alert_type, filters, selected_server, selected_users, detai
     }])
     st.session_state.admin_log = pd.concat([new_log, st.session_state.admin_log], ignore_index=True)
     st.success(f"Successfully programmed '{alert_type}' alert for {len(selected_users)} user(s) on {selected_server}!")
+
+# --- EDIT AND DELETE DIALOGS (GLOBAL DASHBOARD) ---
+@st.dialog("✏️ Edit Configuration")
+def edit_config_popup(config_id, row_data):
+    st.write(f"Editing settings for **{config_id}**")
+    
+    new_server = st.selectbox("Target Server", ["JLR Server", "GM Server", "Paccar Server"], index=["JLR Server", "GM Server", "Paccar Server"].index(row_data['Server']))
+    new_users = st.text_input("Assigned Users (comma separated)", value=row_data['Users'])
+    new_details = st.text_area("Configuration Details", value=row_data['Configuration details'])
+    
+    if st.button("Save Changes", type="primary", use_container_width=True):
+        if not new_users.strip():
+            st.error("⚠️ Assigned Users cannot be empty.")
+        else:
+            idx = st.session_state.admin_log.index[st.session_state.admin_log['Config ID'] == config_id].tolist()[0]
+            st.session_state.admin_log.at[idx, 'Server'] = new_server
+            st.session_state.admin_log.at[idx, 'Users'] = new_users
+            st.session_state.admin_log.at[idx, 'Configuration details'] = new_details
+            st.session_state.admin_log.at[idx, 'Timestamp'] = datetime.datetime.now().strftime("%Y-%m-%d %H:%M:%S") + " (Edited)"
+            st.rerun()
+
+@st.dialog("🗑️ Delete Configuration")
+def delete_config_popup(config_id):
+    st.warning(f"Are you sure you want to permanently delete **{config_id}**?")
+    st.write("This action will immediately remove the alert configuration for all assigned users.")
+    
+    c1, c2 = st.columns(2)
+    if c1.button("Cancel", use_container_width=True):
+        st.rerun()
+    if c2.button("Confirm Delete", type="primary", use_container_width=True):
+        st.session_state.admin_log = st.session_state.admin_log[st.session_state.admin_log['Config ID'] != config_id]
+        st.rerun()
 
 # ==========================================
 #         SIDEBAR: NAVIGATION & FILTERS
@@ -785,10 +822,43 @@ elif page == "Global Dashboard":
         with f_col2:
             alert_filter = st.multiselect("Filter by Alert Type", options=st.session_state.admin_log['Alert Type'].unique(), default=[])
         st.divider()
-        display_df = st.session_state.admin_log
+        
+        display_df = st.session_state.admin_log.copy()
         if server_filter: display_df = display_df[display_df['Server'].isin(server_filter)]
         if alert_filter: display_df = display_df[display_df['Alert Type'].isin(alert_filter)]
+        
         st.dataframe(display_df, use_container_width=True, hide_index=True)
+        
+        # --- Management Panel ---
+        st.markdown("### ⚙️ Manage Configurations")
+        if not display_df.empty:
+            selected_config_id = st.selectbox(
+                "Select a configuration to View, Edit, or Delete:", 
+                display_df['Config ID'].tolist(),
+                format_func=lambda x: f"{x} | {display_df[display_df['Config ID'] == x]['Alert Type'].values[0]} on {display_df[display_df['Config ID'] == x]['Server'].values[0]}"
+            )
+            
+            if selected_config_id:
+                sel_row = display_df[display_df['Config ID'] == selected_config_id].iloc[0]
+                
+                with st.container(border=True):
+                    st.markdown(f"#### Configuration Details: `{selected_config_id}`")
+                    col1, col2 = st.columns(2)
+                    col1.write(f"**Alert Type:** {sel_row['Alert Type']}")
+                    col1.write(f"**Server:** {sel_row['Server']}")
+                    col1.write(f"**Assigned Users:** {sel_row['Users']}")
+                    col2.write(f"**Target Scope (Filters):** {sel_row['Target Scope (Filters)']}")
+                    col2.write(f"**Details:** {sel_row['Configuration details']}")
+                    col2.write(f"**Last Updated:** {sel_row['Timestamp']}")
+                    
+                    st.divider()
+                    bc1, bc2, bc3 = st.columns([1, 1, 4])
+                    
+                    if bc1.button("✏️ Edit", key=f"edit_{selected_config_id}", use_container_width=True):
+                        edit_config_popup(selected_config_id, sel_row)
+                        
+                    if bc2.button("🗑️ Delete", key=f"del_{selected_config_id}", use_container_width=True):
+                        delete_config_popup(selected_config_id)
 
 # ==========================================
 #        CLIENT ALERTS PORTAL
@@ -890,24 +960,24 @@ elif page == "Client Alerts Portal":
                     type_df = sev_df[sev_df['Alert Type'] == a_type].copy()
                     display_cols = base_cols.copy()
                     
-                    if a_type == "Cycle Time": display_cols["Metric_1"] = "% of deviation"
+                    if a_type == "Cycle Time": display_cols["Metric_1"] = "% of Deviation"
                     elif a_type == "Low Run Rate - Shot Efficiency": display_cols["Metric_1"] = "Run Rate Shot Efficiency"
                     elif a_type == "Low Run Rate - Time Stability": display_cols["Metric_1"] = "Run Rate Time Stability"
-                    elif "Capacity Risk" in a_type: display_cols["Metric_1"] = "% of loss"
-                    elif a_type == "Tooling EOL (Utilization)": display_cols["Metric_1"] = "Utilization Rate"
-                    elif a_type == "Tooling EOL (Remaining Days)": display_cols["Metric_1"] = "Remaining Life (Days)"
-                    elif a_type == "Tooling EOL (Combination)":
-                        display_cols["Metric_1"] = "Utilization Rate (%)"
-                        display_cols["Metric_2"] = "Remaining Life (days)"
-                    elif a_type == "Operation Status (Tool Producing)": display_cols["Metric_1"] = "Date & Time"
-                    elif a_type == "Operation Status (Tool Stops)": display_cols["Metric_1"] = "Tool Stops"
+                    elif "Capacity Risk" in a_type: display_cols["Metric_1"] = "% of Loss"
+                    elif "EOL" in a_type: display_cols["Metric_1"] = "Utilization Rate"
+                    if a_type in ["Tooling EOL (Remaining Days)", "Tooling EOL (Combination)"]:
+                        display_cols["Metric_2"] = "Remaining Life (Days)"
+                    elif "Operation Status" in a_type:
+                        pass
                     else:
                         status_val = a_type.replace("Operation Status (", "").replace(")", "")
                         type_df["Tooling Status"] = status_val
                         display_cols["Tooling Status"] = "Tooling Status"
-                        display_cols["Metric_1"] = "Date & Time"
                     
-                    out_df = type_df[list(display_cols.keys())].rename(columns=display_cols)
+                    display_cols["Date/Time"] = "Date & Time"
+                    
+                    final_cols = {k: v for k, v in display_cols.items() if k in type_df.columns}
+                    out_df = type_df[list(final_cols.keys())].rename(columns=final_cols)
                     if len(sev_df['Alert Type'].unique()) > 1: st.markdown(f"##### {a_type}")
                     st.dataframe(out_df, use_container_width=True, hide_index=True)
                 st.write("")
