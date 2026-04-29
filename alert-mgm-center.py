@@ -31,6 +31,13 @@ try:
 except ImportError:
     MATPLOTLIB_AVAILABLE = False
 
+# --- GLOBAL MOCK DATA ---
+MOCK_USERS = {
+    "JLR Server": ["Alex Carter (alex.carter@jlr.com)", "Jane Smith (jane.smith@jlr.com)", "Mark Davis (m.davis@jlr.com)", "Rachel Green (rachel.g@jlr.com)", "Tom Hardy (tom.h@jlr.com)", "Oliver Twist (oliver.t@jlr.com)"],
+    "GM Server": ["Mike Johnson (mjohnson@gm.com)", "Sarah Connor (sconnor@gm.com)", "Tom Wilson (twilson@gm.com)", "Nancy Drew (nancy.d@gm.com)", "Peter Parker (peter.p@gm.com)", "Bruce Banner (bruce.b@gm.com)"],
+    "Paccar Server": ["David Lee (d.lee@paccar.com)", "Emma Wilson (e.wilson@paccar.com)", "Chris Taylor (ctaylor@paccar.com)", "Clark Kent (clark.k@paccar.com)", "Diana Prince (diana.p@paccar.com)", "Barry Allen (barry.a@paccar.com)"]
+}
+
 # --- SESSION STATE INITIALIZATION ---
 # Re-init if Config ID is missing from a previous session load, or if outdated columns exist
 if 'admin_log' not in st.session_state or "Config ID" not in st.session_state.admin_log.columns or "Configuration details" in st.session_state.admin_log.columns or "Config Payload" not in st.session_state.admin_log.columns:
@@ -645,8 +652,17 @@ def edit_thresholds(alert_type, payload, config_id):
 def edit_config_popup(config_id, row_data):
     st.write(f"Editing settings for **{config_id}**")
     st.markdown("##### General Settings")
-    new_server = st.selectbox("Target Server", ["JLR Server", "GM Server", "Paccar Server"], index=["JLR Server", "GM Server", "Paccar Server"].index(row_data['Server']))
-    new_users = st.text_input("Assigned Users (comma separated)", value=row_data['Users'])
+    new_server = st.selectbox("Target Server", list(MOCK_USERS.keys()), index=list(MOCK_USERS.keys()).index(row_data['Server']))
+    
+    # Parse existing users into a list for the multiselect default
+    existing_users_list = [u.strip() for u in str(row_data['Users']).split(",") if u.strip()]
+    available_users = MOCK_USERS.get(new_server, [])
+    
+    # Ensure defaults are valid for the currently selected server to avoid Streamlit errors
+    valid_defaults = [u for u in existing_users_list if u in available_users]
+    
+    new_users_list = st.multiselect("Assigned Users", options=available_users, default=valid_defaults, help="Search and select users")
+    new_users = ", ".join(new_users_list)
     
     st.divider()
     
@@ -654,8 +670,8 @@ def edit_config_popup(config_id, row_data):
     
     st.divider()
     if st.button("Save Changes", type="primary", use_container_width=True):
-        if not new_users.strip():
-            st.error("⚠️ Assigned Users cannot be empty.")
+        if not new_users_list:
+            st.error("⚠️ Please assign at least one user.")
         else:
             idx = st.session_state.admin_log.index[st.session_state.admin_log['Config ID'] == config_id].tolist()[0]
             st.session_state.admin_log.at[idx, 'Server'] = new_server
@@ -686,14 +702,14 @@ with st.sidebar:
 
     if page == "Configuration Management":
         st.markdown("### User Assignment")
-        selected_server = st.selectbox("Target Server", ["JLR Server", "GM Server", "Paccar Server"])
+        selected_server = st.selectbox("Target Server", list(MOCK_USERS.keys()))
         
-        mock_users = {
-            "JLR Server": ["Alex Carter (alex.carter@jlr.com)", "Jane Smith (jane.smith@jlr.com)", "Mark Davis (m.davis@jlr.com)"],
-            "GM Server": ["Mike Johnson (mjohnson@gm.com)", "Sarah Connor (sconnor@gm.com)", "Tom Wilson (twilson@gm.com)"],
-            "Paccar Server": ["David Lee (d.lee@paccar.com)", "Emma Wilson (e.wilson@paccar.com)", "Chris Taylor (ctaylor@paccar.com)"]
-        }
-        selected_users = st.multiselect("Select User(s)", mock_users[selected_server], default=[mock_users[selected_server][0]])
+        selected_users = st.multiselect(
+            "Select User(s)", 
+            options=MOCK_USERS[selected_server], 
+            default=[MOCK_USERS[selected_server][0]],
+            help="Search and select users"
+        )
         st.divider()
         st.markdown("### Target Data Filters")
         user_filters = render_filters("admin_filters")
