@@ -390,10 +390,47 @@ def generate_client_dashboard_pdf(df):
     pdf.image(t5, x=105, y=125, w=80)
     pdf.image(t6, x=195, y=125, w=80)
 
-    # Page 2 for EOL
+    # Page 2 for EOL and Top Entities
     pdf.add_page()
     t7 = save_matplot_donut(df[df['Alert Type'].str.contains('EOL')], "Tooling End of Life", ['Level 1', 'Level 2', 'Level 3'], sev_colors)
     pdf.image(t7, x=15, y=30, w=80)
+
+    # --- Add Top Impacted Entities ---
+    pdf.set_xy(15, 110)
+    pdf.set_font('Arial', 'B', 12)
+    pdf.set_text_color(30, 58, 138)
+    pdf.cell(0, 10, clean("TOP IMPACTED ENTITIES"), 0, 1, 'L')
+    pdf.ln(2)
+
+    top_tools = df['Tool'].value_counts().head(5)
+    top_plants = df['Plant'].value_counts().head(5)
+    top_suppliers = df['Supplier'].value_counts().head(5)
+
+    def draw_mini_table(x_start, title, data_series, col1_name):
+        pdf.set_xy(x_start, 125)
+        pdf.set_font('Arial', 'B', 10)
+        pdf.set_text_color(100, 116, 139)
+        pdf.cell(80, 6, clean(title), 0, 1, 'L')
+        
+        pdf.set_xy(x_start, 132)
+        pdf.set_font('Arial', 'B', 8)
+        pdf.set_fill_color(241, 245, 249)
+        pdf.set_text_color(71, 85, 105)
+        pdf.cell(60, 6, clean(col1_name), 1, 0, 'L', 1)
+        pdf.cell(20, 6, "Alerts", 1, 1, 'C', 1)
+
+        pdf.set_font('Arial', '', 8)
+        pdf.set_text_color(15, 23, 42)
+        y_pos = 138
+        for name, count in data_series.items():
+            pdf.set_xy(x_start, y_pos)
+            pdf.cell(60, 6, clean(str(name)[:30]), 1, 0, 'L')
+            pdf.cell(20, 6, str(count), 1, 1, 'C')
+            y_pos += 6
+
+    draw_mini_table(15, "Top Impacted Tools", top_tools, "Tooling ID")
+    draw_mini_table(105, "Top Impacted Plants", top_plants, "Plant Name")
+    draw_mini_table(195, "Top Impacted Suppliers", top_suppliers, "Supplier Name")
 
     try:
         output = bytes(pdf.output())
@@ -1053,7 +1090,7 @@ elif page == "Client Alerts Portal":
         if high_risk_df.empty:
             st.success("No high-risk alerts currently active.")
         else:
-            top_tools = high_risk_df.groupby('Tool').size().reset_index(name='Alert Count')
+            top_tools = high_risk_df.groupby(['Tool']).size().reset_index(name='Alert Count')
             top_tools = top_tools.sort_values(by='Alert Count', ascending=False).head(3)
             
             cols = st.columns(3)
