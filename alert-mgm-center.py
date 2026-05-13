@@ -496,13 +496,12 @@ def render_payload_details(alert_type, payload):
     st.write(f"**Frequency:** {payload.get('freq', 'N/A')}")
     
     if "Cycle Time" in alert_type:
+        st.write(f"**No Alert Zone:** ≤ ±{payload.get('no_alert', 5)}%")
         st.write(f"**Levels Configured:** {payload.get('levels')}")
         limits = payload.get('limits', [])
         for i, limit in enumerate(limits):
-            if i < len(limits) - 1:
-                st.write(f"- **Level {i+1}:** ±{limit}% < deviation ≤ ±{limits[i+1]}%")
-            else:
-                st.write(f"- **Level {i+1}:** > ±{limit}%")
+            lower = payload.get('no_alert', 5) if i == 0 else limits[i-1]
+            st.write(f"- **Level {i+1}:** ±{lower}% < deviation ≤ ±{limit}%")
     
     elif "Run Rate" in alert_type:
         st.write(f"**No Alert Zone:** ≥ {payload.get('no_alert')}%")
@@ -552,10 +551,11 @@ def edit_thresholds(alert_type, payload, config_id):
     st.markdown("##### ⚙️ Alert Thresholds")
     
     if "Cycle Time" in alert_type:
+        new_payload['no_alert'] = st.number_input("No Alert Zone (Deviation ±%)", min_value=0, max_value=100, value=payload.get('no_alert', 5), key=f"e_ct_na_{config_id}")
         new_payload['levels'] = st.number_input("Levels", 1, 5, payload.get('levels', 2), key=f"e_ct_lvl_{config_id}")
         cols = st.columns(new_payload['levels'])
         new_limits = []
-        prev_val = 0
+        prev_val = new_payload['no_alert']
         for i in range(new_payload['levels']):
             with cols[i]:
                 def_val = payload.get('limits', [])[i] if i < len(payload.get('limits', [])) else prev_val + 5
@@ -793,12 +793,17 @@ if page == "Configuration Setup":
         ct_enabled = st.toggle("Enable Cycle Time Alerts", value=True, key="ct_toggle")
         if ct_enabled:
             with st.container(border=True):
+                st.markdown("##### 'No Alert' Zone")
+                ct_no_alert = st.number_input("No Alert Zone (Deviation ±%)", min_value=0, max_value=100, value=5, key="ct_no_alert")
+                st.info(f"Production is considered **Healthy** when absolute deviation is **≤ {ct_no_alert}%**.")
+                st.divider()
+
                 st.markdown("##### Configuration: Number of Levels")
                 ct_num = st.number_input("How many alert levels do you want to configure?", min_value=1, max_value=5, value=2, key="ct_num_levels")
                 st.markdown("##### Deviation Threshold Boundaries")
                 st.write("Set the deviation limits for each level.")
                 ct_limits = []
-                prev_val = 0
+                prev_val = ct_no_alert
                 ct_cols = st.columns(ct_num)
                 for i in range(ct_num):
                     with ct_cols[i]:
@@ -808,26 +813,22 @@ if page == "Configuration Setup":
                         ct_limits.append(val)
                         prev_val = val
                 st.markdown("##### Alert Conditions Summary")
-                st.info(f"Production is considered **Healthy** when deviation is between **0% and {ct_limits[0]}%**. No alerts will be generated in this zone.")
                 ct_disp_cols = st.columns(ct_num)
                 for i in range(ct_num):
                     with ct_disp_cols[i]:
-                        lower = ct_limits[i]
-                        if i < ct_num - 1:
-                            upper = ct_limits[i+1]
-                            txt = f"**Level {i+1}**\n\nTriggers when absolute deviation is between **{lower}% and {upper}%**.\n\n`(±{lower}% < deviation ≤ ±{upper}%)`"
-                        else:
-                            txt = f"**Level {i+1}**\n\nTriggers when absolute deviation is strictly greater than **{lower}%**.\n\n`(deviation > ±{lower}%)`"
+                        lower = ct_no_alert if i == 0 else ct_limits[i-1]
+                        upper = ct_limits[i]
+                        txt = f"**Level {i+1}**\n\nTriggers when absolute deviation is between **{lower}% and {upper}%**.\n\n`(±{lower}% < deviation ≤ ±{upper}%)`"
                         display_level_box(i, txt)
                 st.divider()
                 ct_freq = st.selectbox("Alert Frequency", ["Hourly", "Daily", "Weekly", "Monthly"], key="ct_freq")
             if st.button("Save Cycle Time Settings", type="primary"):
-                log_admin_action("Cycle Time", user_filters, selected_server, selected_users, {"levels": ct_num, "limits": ct_limits, "freq": ct_freq})
+                log_admin_action("Cycle Time", user_filters, selected_server, selected_users, {"no_alert": ct_no_alert, "levels": ct_num, "limits": ct_limits, "freq": ct_freq})
 
     # --- 2. RUN RATE ---
     with tab2:
         st.subheader("Run Rate Alerts")
-        st.write("Alerts based on Run Rate Shot Efficiency and Time Stability.")
+        st.write("Alerts based on Run Rate Shot Efficiency and Run Rate Time Stability")
         rr_enabled = st.toggle("Enable Run Rate Alerts", value=True, key="rr_toggle")
         if rr_enabled:
             rr_tab1, rr_tab2 = st.tabs(["Low Run Rate Shot Efficiency", "Low Run Rate Time Stability"])
