@@ -451,6 +451,133 @@ def generate_client_dashboard_pdf(df):
 
     return output
 
+def generate_summary_pdf(df, freq, client):
+    """Generates the simulated automated alert email PDF attachment with strict frequency filtering."""
+    def clean(text):
+        text = str(text).replace('≤', '<=').replace('≥', '>=')
+        return text.encode('latin-1', 'replace').decode('latin-1')
+
+    # Filter strictly by configured frequency and OEM Client
+    df_filtered = df[(df['Frequency'] == freq) & (df['OEM Division'] == client)]
+
+    now = datetime.datetime.now()
+    if freq == "Daily":
+        period_name = f"{now.strftime('%B %d')}"
+        start_date = (now - datetime.timedelta(days=1)).strftime('%Y-%m-%d')
+        end_date = now.strftime('%Y-%m-%d')
+        title_date = f"{now.strftime('%B %d, %Y')}"
+    elif freq == "Weekly":
+        week_num = now.isocalendar()[1]
+        period_name = f"Week {week_num}"
+        start_date = (now - datetime.timedelta(days=7)).strftime('%Y-%m-%d')
+        end_date = now.strftime('%Y-%m-%d')
+        title_date = f"Week {week_num}, {now.year}"
+    else: # Monthly
+        month_name = now.strftime('%B')
+        period_name = month_name
+        start_date = (now - datetime.timedelta(days=30)).strftime('%Y-%m-%d')
+        end_date = now.strftime('%Y-%m-%d')
+        title_date = f"{month_name}, {now.year}"
+
+    class PDF(FPDF):
+        def header(self):
+            self.set_fill_color(30, 58, 138)
+            self.rect(0, 0, 297, 20, 'F')
+            self.set_y(6)
+            self.set_font('Arial', 'B', 16)
+            self.set_text_color(255, 255, 255)
+            self.cell(10)
+            self.cell(150, 8, clean(f'{freq} Alert Summary - {title_date}'), 0, 0, 'L')
+            self.set_font('Arial', '', 10)
+            self.cell(120, 8, clean(f'Generated: {now.strftime("%Y-%m-%d %H:%M")}'), 0, 1, 'R')
+            self.ln(10)
+
+    pdf = PDF('L', 'mm', 'A4')
+    pdf.add_page()
+    
+    # Meta Header Info
+    pdf.set_font('Arial', 'B', 11)
+    pdf.set_text_color(30, 58, 138)
+    pdf.cell(0, 6, clean(f"Client: {client}"), 0, 1)
+    pdf.set_font('Arial', '', 11)
+    pdf.set_text_color(0, 0, 0)
+    pdf.cell(0, 6, clean(f"Reporting Period: {period_name}, {now.year} - from {start_date} to {end_date}"), 0, 1)
+    pdf.cell(0, 6, clean(f"Total Number of Alerts: {len(df_filtered)}"), 0, 1)
+    pdf.ln(5)
+
+    groups = [
+        ("Cycle Time", ["Cycle Time"]),
+        ("Run Rate", ["Low Run Rate - Shot Efficiency", "Low Run Rate - Time Stability"]),
+        ("Capacity Risk", ["Capacity Risk (Optimal)", "Capacity Risk (Target)"]),
+        ("Tooling End of Life", ["Tooling EOL (Combination)", "Tooling EOL (Utilization)", "Tooling EOL (Remaining Days)"]),
+        ("Operation Status", ["Operation Status (Tool Producing)", "Operation Status (Tool Stops)", "Operation Status (Inactive)", "Operation Status (Sensor Offline)", "Operation Status (Sensor Detached)"])
+    ]
+
+    for group_name, alert_types in groups:
+        group_df = df_filtered[df_filtered['Alert Type'].isin(alert_types)]
+        if group_df.empty: continue
+
+        pdf.set_font('Arial', 'B', 12)
+        pdf.set_fill_color(241, 245, 249)
+        pdf.set_text_color(30, 58, 138)
+        pdf.cell(0, 8, clean(group_name), 0, 1, 'L', 1)
+        pdf.ln(2)
+
+        for a_type in alert_types:
+            type_df = group_df[group_df['Alert Type'] == a_type]
+            if type_df.empty: continue
+
+            formatted_df = format_df_for_client_export(type_df, a_type)
+            
+            if len(alert_types) > 1:
+                pdf.set_font('Arial', 'B', 10)
+                pdf.set_text_color(71, 85, 105)
+                pdf.cell(0, 6, clean(a_type), 0, 1, 'L')
+            
+            pdf.set_font('Arial', 'B', 8)
+            pdf.set_fill_color(30, 58, 138)
+            pdf.set_text_color(255, 255, 255)
+            cols = list(formatted_df.columns)
+            
+            # Smart Table Width Distribution for A4 Landscape (277mm usable width)
+            col_w = []
+            remaining_w = 277
+            fixed_cols = {'Date & Time': 28, 'Severity': 15, 'Tooling ID': 22, 'Utilization Rate': 20, '% of Deviation': 20, '% of Loss': 20, 'Tooling Status': 22}
+            
+            for c in cols:
+                if c in fixed_cols:
+                    col_w.append(fixed_cols[c])
+                    remaining_w -= fixed_cols[c]
+                else:
+                    col_w.append(0)
+            
+            dynamic_count = col_w.count(0)
+            if dynamic_count > 0:
+                dyn_width = max(15, remaining_w / dynamic_count)
+                col_w = [dyn_width if w == 0 else w for w in col_w]
+
+            for i, c in enumerate(cols):
+                pdf.cell(col_w[i], 6, clean(c), 1, 0, 'C', 1)
+            pdf.ln()
+
+            pdf.set_font('Arial', '', 7)
+            pdf.set_text_color(0, 0, 0)
+            for _, row in formatted_df.iterrows():
+                # Automatic page breaking before content gets cut off
+                if pdf.get_y() > 180:
+                    pdf.add_page()
+                for i, c in enumerate(cols):
+                    val = clean(str(row[c]))
+                    if len(val) > 28: val = val[:25] + "..." # Truncate long strings neatly
+                    pdf.cell(col_w[i], 6, val, 1, 0, 'C')
+                pdf.ln()
+            pdf.ln(4)
+
+    try:
+        return bytes(pdf.output())
+    except TypeError:
+        return pdf.output(dest='S').encode('latin-1')
+
 # --- REUSABLE FILTER FUNCTION ---
 def render_filters(key_prefix):
     st.caption("Select desired filters first to define the target scope. Leave empty to apply globally.")
@@ -994,7 +1121,34 @@ if page == "Configuration Setup":
 elif page == "Configuration Management":
     st.markdown('<div class="main-header">Configuration Management</div>', unsafe_allow_html=True)
     st.markdown('<div class="sub-header">A comprehensive view of all active alert configurations across all servers and user groups.</div>', unsafe_allow_html=True)
-    st.write("")
+    
+    st.markdown("### 📧 Automated Alert Summary (Simulation)")
+    st.write("Generate a simulated PDF attachment for automated digest emails sent to clients.")
+    
+    sim_col1, sim_col2, sim_col3 = st.columns([2, 2, 4])
+    with sim_col1:
+        sim_freq = st.selectbox("Email Frequency", ["Daily", "Weekly", "Monthly"], key="sim_freq")
+    with sim_col2:
+        available_oems = st.session_state.client_alerts_db['OEM Division'].unique().tolist()
+        sim_oem = st.selectbox("Client (OEM)", available_oems, key="sim_oem")
+        
+    with sim_col3:
+        st.write("") 
+        st.write("")
+        if FPDF_AVAILABLE:
+            pdf_bytes = generate_summary_pdf(st.session_state.client_alerts_db, sim_freq, sim_oem)
+            st.download_button(
+                label=f"⬇️ Generate & Download {sim_freq} Alert Summary PDF", 
+                data=pdf_bytes, 
+                file_name=f"{sim_freq}_Alert_Summary_{sim_oem.replace(' ', '_')}.pdf", 
+                mime="application/pdf", 
+                type="primary",
+                use_container_width=True
+            )
+        else:
+            st.error("FPDF library missing.")
+    
+    st.divider()
 
     if st.session_state.admin_log.empty:
         st.info("No configurations have been applied yet in this session.")
@@ -1187,6 +1341,10 @@ elif page == "Client Alerts Portal":
                             display_cols["Metric_2"] = "Remaining Life (Days)"
                     elif "Operation Status" in a_type:
                         pass
+                    else:
+                        status_val = a_type.replace("Operation Status (", "").replace(")", "")
+                        type_df["Tooling Status"] = status_val
+                        display_cols["Tooling Status"] = "Tooling Status"
                     
                     display_cols["Date/Time"] = "Date & Time"
                     
