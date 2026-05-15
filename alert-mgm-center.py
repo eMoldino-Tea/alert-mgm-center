@@ -240,7 +240,8 @@ def format_df_for_client_export(df_sub, a_type):
         if a_type in ["Tooling EOL (Remaining Days)", "Tooling EOL (Combination)"]:
             display_cols["Metric_2"] = "Remaining Life (Days)"
     elif "Operation Status" in a_type:
-        pass # Drop the metric column entirely for Operation Status
+        if "Severity" in display_cols:
+            del display_cols["Severity"]
 
     display_cols["Date/Time"] = "Date & Time"
     
@@ -1348,7 +1349,8 @@ elif page == "Client Alerts Portal":
                         if a_type in ["Tooling EOL (Remaining Days)", "Tooling EOL (Combination)"]:
                             display_cols["Metric_2"] = "Remaining Life (Days)"
                     elif "Operation Status" in a_type:
-                        pass
+                        if "Severity" in display_cols:
+                            del display_cols["Severity"]
                     else:
                         status_val = a_type.replace("Operation Status (", "").replace(")", "")
                         type_df["Tooling Status"] = status_val
