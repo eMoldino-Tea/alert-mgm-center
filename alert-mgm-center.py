@@ -1107,9 +1107,7 @@ elif page == "Client Alerts Portal":
     # MAIN LISTING PAGE & COMMAND CENTER
     # ---------------------------------------------------------
     if st.session_state.client_portal_view == "list":
-        header_col, export_col = st.columns([5, 1])
-        with header_col:
-            st.markdown('<div class="main-header">Alert Center</div>', unsafe_allow_html=True)
+        st.markdown('<div class="main-header">Alert Center</div>', unsafe_allow_html=True)
         
         df = st.session_state.client_alerts_db.copy()
         
@@ -1128,45 +1126,26 @@ elif page == "Client Alerts Portal":
         if search_query:
             df = df[df.apply(lambda row: row.astype(str).str.contains(search_query, case=False).any(), axis=1)]
 
-        with export_col:
-            st.write("")
-            st.write("")
-            with st.popover("📥 Export Data", use_container_width=True):
-                st.caption(f"Export {len(df)} filtered alerts.")
-                export_format = st.radio("Format", ["CSV", "PDF"], horizontal=True, key="client_export_format", label_visibility="collapsed")
-                
-                if export_format == "CSV":
-                    zip_file_bytes = generate_client_csv_zip(df)
-                    st.download_button(
-                        label="⬇️ Download CSV Zip",
-                        data=zip_file_bytes,
-                        file_name=f"alert_center_export_{datetime.datetime.now().strftime('%Y%m%d')}.zip",
-                        mime="application/zip",
-                        use_container_width=True,
-                        key="client_csv_dl"
-                    )
-                else:
-                    if FPDF_AVAILABLE and MATPLOTLIB_AVAILABLE:
-                        pdf_data = generate_client_dashboard_pdf(df)
-                        st.download_button(
-                            label="⬇️ Download PDF Dashboard",
-                            data=pdf_data,
-                            file_name=f"alert_center_dashboard_{datetime.datetime.now().strftime('%Y%m%d')}.pdf",
-                            mime="application/pdf",
-                            use_container_width=True,
-                            key="client_pdf_dl"
-                        )
-                    else:
-                        st.warning("⚠️ FPDF or Matplotlib missing. Run `pip install fpdf matplotlib`.")
-                
-                st.divider()
-                st.write("✉️ Send to Email")
-                email_input = st.text_input("Email Address", value="user@client.com", key="client_email_in", label_visibility="collapsed")
-                if st.button("Send Now", type="primary", use_container_width=True, key="client_email_btn"):
-                    st.success(f"Sent successfully to {email_input}!")
-
         st.write("")
         
+        def render_tab_export_button(tab_id, df_subset, filename_prefix):
+            with st.popover("📥 Export Tab Data", use_container_width=True):
+                st.caption(f"Export {len(df_subset)} filtered alerts.")
+                zip_file_bytes = generate_client_csv_zip(df_subset)
+                st.download_button(
+                    label="⬇️ Download CSV Zip",
+                    data=zip_file_bytes,
+                    file_name=f"{filename_prefix}_export_{datetime.datetime.now().strftime('%Y%m%d')}.zip",
+                    mime="application/zip",
+                    use_container_width=True,
+                    key=f"client_csv_dl_{tab_id}"
+                )
+                st.divider()
+                st.write("✉️ Send to Email")
+                email_input = st.text_input("Email Address", value="user@client.com", key=f"client_email_in_{tab_id}", label_visibility="collapsed")
+                if st.button("Send Now", type="primary", use_container_width=True, key=f"client_email_btn_{tab_id}"):
+                    st.success(f"Sent successfully to {email_input}!")
+
         def format_trigger_value(row):
             val = str(row['Metric_1'])
             if pd.notna(row['Metric_2']) and str(row['Metric_2']).strip():
@@ -1194,19 +1173,20 @@ elif page == "Client Alerts Portal":
                     type_df = sev_df[sev_df['Alert Type'] == a_type].copy()
                     display_cols = base_cols.copy()
                     
-                    if a_type == "Cycle Time": display_cols["Metric_1"] = "% of Deviation"
-                    elif a_type == "Low Run Rate - Shot Efficiency": display_cols["Metric_1"] = "Run Rate Shot Efficiency"
-                    elif a_type == "Low Run Rate - Time Stability": display_cols["Metric_1"] = "Run Rate Time Stability"
-                    elif "Capacity Risk" in a_type: display_cols["Metric_1"] = "% of Loss"
-                    elif "EOL" in a_type: display_cols["Metric_1"] = "Utilization Rate"
-                    if a_type in ["Tooling EOL (Remaining Days)", "Tooling EOL (Combination)"]:
-                        display_cols["Metric_2"] = "Remaining Life (Days)"
+                    if a_type == "Cycle Time": 
+                        display_cols["Metric_1"] = "% of Deviation"
+                    elif a_type == "Low Run Rate - Shot Efficiency": 
+                        display_cols["Metric_1"] = "Run Rate Shot Efficiency"
+                    elif a_type == "Low Run Rate - Time Stability": 
+                        display_cols["Metric_1"] = "Run Rate Time Stability"
+                    elif "Capacity Risk" in a_type: 
+                        display_cols["Metric_1"] = "% of Loss"
+                    elif "EOL" in a_type: 
+                        display_cols["Metric_1"] = "Utilization Rate"
+                        if a_type in ["Tooling EOL (Remaining Days)", "Tooling EOL (Combination)"]:
+                            display_cols["Metric_2"] = "Remaining Life (Days)"
                     elif "Operation Status" in a_type:
                         pass
-                    else:
-                        status_val = a_type.replace("Operation Status (", "").replace(")", "")
-                        type_df["Tooling Status"] = status_val
-                        display_cols["Tooling Status"] = "Tooling Status"
                     
                     display_cols["Date/Time"] = "Date & Time"
                     
@@ -1378,6 +1358,28 @@ elif page == "Client Alerts Portal":
     ])
 
     with cat_tabs[0]: # Dashboard Overview
+        
+        c1, c2 = st.columns([8, 2])
+        with c2:
+            with st.popover("📥 Export Dashboard", use_container_width=True):
+                st.caption("Export Executive Dashboard PDF.")
+                if FPDF_AVAILABLE and MATPLOTLIB_AVAILABLE:
+                    pdf_data = generate_client_dashboard_pdf(df)
+                    st.download_button(
+                        label="⬇️ Download PDF Dashboard",
+                        data=pdf_data,
+                        file_name=f"alert_center_dashboard_{datetime.datetime.now().strftime('%Y%m%d')}.pdf",
+                        mime="application/pdf",
+                        use_container_width=True,
+                        key="client_pdf_dl_ov"
+                    )
+                else:
+                    st.warning("⚠️ FPDF or Matplotlib missing.")
+                st.divider()
+                st.write("✉️ Send to Email")
+                email_input = st.text_input("Email Address", value="user@client.com", key="client_email_in_ov", label_visibility="collapsed")
+                if st.button("Send Now", type="primary", use_container_width=True, key="client_email_btn_ov"):
+                    st.success(f"Sent successfully to {email_input}!")
 
         kpi1, kpi2, kpi3, kpi4 = st.columns(4)
         kpi1.markdown(f"<div class='metric-card'><div class='metric-title'>Total Active Alerts</div><div class='metric-value'>{len(df)}</div></div>", unsafe_allow_html=True)
@@ -1515,9 +1517,16 @@ elif page == "Client Alerts Portal":
                     top_supplier_popup(row['Supplier'], df[df['Supplier'] == row['Supplier']])
 
     with cat_tabs[1]: # Cycle Time
-        render_alert_hierarchy(df[df['Alert Type'] == 'Cycle Time'], "Cycle Time")
+        df_tab = df[df['Alert Type'] == 'Cycle Time']
+        c1, c2 = st.columns([8, 2])
+        with c2: render_tab_export_button("cycle_time", df_tab, "cycle_time")
+        render_alert_hierarchy(df_tab, "Cycle Time")
         
     with cat_tabs[2]: # Run Rate
+        df_tab = df[df['Alert Type'].str.contains('Run Rate')]
+        c1, c2 = st.columns([8, 2])
+        with c2: render_tab_export_button("run_rate", df_tab, "run_rate")
+        
         st.markdown("### Run Rate Shot Efficiency")
         render_alert_hierarchy(df[df['Alert Type'] == 'Low Run Rate - Shot Efficiency'], "Run Rate Shot Efficiency")
         st.divider()
@@ -1525,6 +1534,10 @@ elif page == "Client Alerts Portal":
         render_alert_hierarchy(df[df['Alert Type'] == 'Low Run Rate - Time Stability'], "Run Rate Time Stability")
         
     with cat_tabs[3]: # Capacity Risk
+        df_tab = df[df['Alert Type'].str.contains('Capacity Risk')]
+        c1, c2 = st.columns([8, 2])
+        with c2: render_tab_export_button("capacity_risk", df_tab, "capacity_risk")
+
         st.markdown("### Loss Parts vs Optimal Capacity")
         render_alert_hierarchy(df[df['Alert Type'] == 'Capacity Risk (Optimal)'], "Optimal Capacity")
         st.divider()
@@ -1532,7 +1545,15 @@ elif page == "Client Alerts Portal":
         render_alert_hierarchy(df[df['Alert Type'] == 'Capacity Risk (Target)'], "Target Capacity")
         
     with cat_tabs[4]: # Tooling EOL
-        render_alert_hierarchy(df[df['Alert Type'].str.contains('EOL')], "EOL")
+        df_tab = df[df['Alert Type'].str.contains('EOL')]
+        c1, c2 = st.columns([8, 2])
+        with c2: render_tab_export_button("tooling_eol", df_tab, "tooling_eol")
+
+        render_alert_hierarchy(df_tab, "EOL")
         
     with cat_tabs[5]: # Operation Status
-        render_alert_hierarchy(df[df['Alert Type'].str.contains('Operation Status')], "Operation Status")
+        df_tab = df[df['Alert Type'].str.contains('Operation Status')]
+        c1, c2 = st.columns([8, 2])
+        with c2: render_tab_export_button("operation_status", df_tab, "operation_status")
+
+        render_alert_hierarchy(df_tab, "Operation Status")
