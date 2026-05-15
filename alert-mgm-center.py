@@ -1136,10 +1136,19 @@ elif page == "Configuration Management":
         st.write("")
         if FPDF_AVAILABLE:
             pdf_bytes = generate_summary_pdf(st.session_state.client_alerts_db, sim_freq)
+            
+            now = datetime.datetime.now()
+            if sim_freq == "Daily":
+                export_filename = f"eMoldino Daily Alert Summary - {now.strftime('%Y%m%d')}.pdf"
+            elif sim_freq == "Weekly":
+                export_filename = f"eMoldino Weekly Alert Summary - Week {now.isocalendar()[1]}, {now.year}.pdf"
+            else:
+                export_filename = f"eMoldino Monthly Alert Summary - {now.strftime('%B')}, {now.year}.pdf"
+                
             st.download_button(
                 label=f"⬇️ Generate & Download {sim_freq} Alert Summary PDF", 
                 data=pdf_bytes, 
-                file_name=f"{sim_freq}_Alert_Summary_{datetime.datetime.now().strftime('%Y%m%d')}.pdf", 
+                file_name=export_filename, 
                 mime="application/pdf", 
                 type="primary",
                 use_container_width=True
