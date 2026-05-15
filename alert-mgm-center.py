@@ -459,7 +459,7 @@ def generate_summary_pdf(df, freq):
 
     # Filter strictly by configured frequency
     df_filtered = df[df['Frequency'] == freq]
-    server_name = "System Wide Simulation"
+    server_name = "JLR"
 
     now = datetime.datetime.now()
     if freq == "Daily":
