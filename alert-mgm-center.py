@@ -451,33 +451,35 @@ def generate_client_dashboard_pdf(df):
 
     return output
 
-def generate_summary_pdf(df, freq, client):
+def generate_summary_pdf(df, freq):
     """Generates the simulated automated alert email PDF attachment with strict frequency filtering."""
     def clean(text):
         text = str(text).replace('≤', '<=').replace('≥', '>=')
         return text.encode('latin-1', 'replace').decode('latin-1')
 
-    # Filter strictly by configured frequency and OEM Client
-    df_filtered = df[(df['Frequency'] == freq) & (df['OEM Division'] == client)]
+    # Filter strictly by configured frequency
+    df_filtered = df[df['Frequency'] == freq]
+    server_name = "System Wide Simulation"
 
     now = datetime.datetime.now()
     if freq == "Daily":
-        period_name = f"{now.strftime('%B %d')}"
-        start_date = (now - datetime.timedelta(days=1)).strftime('%Y-%m-%d')
-        end_date = now.strftime('%Y-%m-%d')
-        title_date = f"{now.strftime('%B %d, %Y')}"
+        date_str = now.strftime('%Y-%m-%d')
+        header_title = f"Daily Alert Summary - {date_str}"
+        reporting_period = f"{date_str}"
     elif freq == "Weekly":
         week_num = now.isocalendar()[1]
-        period_name = f"Week {week_num}"
+        year_num = now.year
         start_date = (now - datetime.timedelta(days=7)).strftime('%Y-%m-%d')
         end_date = now.strftime('%Y-%m-%d')
-        title_date = f"Week {week_num}, {now.year}"
+        header_title = f"Weekly Alert Summary - Week {week_num}, {year_num}"
+        reporting_period = f"Week {week_num}, {year_num} - from {start_date} to {end_date}"
     else: # Monthly
         month_name = now.strftime('%B')
-        period_name = month_name
+        year_num = now.year
         start_date = (now - datetime.timedelta(days=30)).strftime('%Y-%m-%d')
         end_date = now.strftime('%Y-%m-%d')
-        title_date = f"{month_name}, {now.year}"
+        header_title = f"Monthly Alert Summary - {month_name}, {year_num}"
+        reporting_period = f"{month_name}, {year_num} - from {start_date} to {end_date}"
 
     class PDF(FPDF):
         def header(self):
@@ -487,7 +489,7 @@ def generate_summary_pdf(df, freq, client):
             self.set_font('Arial', 'B', 16)
             self.set_text_color(255, 255, 255)
             self.cell(10)
-            self.cell(150, 8, clean(f'{freq} Alert Summary - {title_date}'), 0, 0, 'L')
+            self.cell(150, 8, clean(header_title), 0, 0, 'L')
             self.set_font('Arial', '', 10)
             self.cell(120, 8, clean(f'Generated: {now.strftime("%Y-%m-%d %H:%M")}'), 0, 1, 'R')
             self.ln(10)
@@ -498,10 +500,10 @@ def generate_summary_pdf(df, freq, client):
     # Meta Header Info
     pdf.set_font('Arial', 'B', 11)
     pdf.set_text_color(30, 58, 138)
-    pdf.cell(0, 6, clean(f"Client: {client}"), 0, 1)
+    pdf.cell(0, 6, clean(f"Client: {server_name}"), 0, 1)
     pdf.set_font('Arial', '', 11)
     pdf.set_text_color(0, 0, 0)
-    pdf.cell(0, 6, clean(f"Reporting Period: {period_name}, {now.year} - from {start_date} to {end_date}"), 0, 1)
+    pdf.cell(0, 6, clean(f"Reporting Period: {reporting_period}"), 0, 1)
     pdf.cell(0, 6, clean(f"Total Number of Alerts: {len(df_filtered)}"), 0, 1)
     pdf.ln(5)
 
@@ -1125,22 +1127,19 @@ elif page == "Configuration Management":
     st.markdown("### 📧 Automated Alert Summary (Simulation)")
     st.write("Generate a simulated PDF attachment for automated digest emails sent to clients.")
     
-    sim_col1, sim_col2, sim_col3 = st.columns([2, 2, 4])
+    sim_col1, sim_col2 = st.columns([3, 7])
     with sim_col1:
         sim_freq = st.selectbox("Email Frequency", ["Daily", "Weekly", "Monthly"], key="sim_freq")
-    with sim_col2:
-        available_oems = st.session_state.client_alerts_db['OEM Division'].unique().tolist()
-        sim_oem = st.selectbox("Client (OEM)", available_oems, key="sim_oem")
         
-    with sim_col3:
+    with sim_col2:
         st.write("") 
         st.write("")
         if FPDF_AVAILABLE:
-            pdf_bytes = generate_summary_pdf(st.session_state.client_alerts_db, sim_freq, sim_oem)
+            pdf_bytes = generate_summary_pdf(st.session_state.client_alerts_db, sim_freq)
             st.download_button(
                 label=f"⬇️ Generate & Download {sim_freq} Alert Summary PDF", 
                 data=pdf_bytes, 
-                file_name=f"{sim_freq}_Alert_Summary_{sim_oem.replace(' ', '_')}.pdf", 
+                file_name=f"{sim_freq}_Alert_Summary_{datetime.datetime.now().strftime('%Y%m%d')}.pdf", 
                 mime="application/pdf", 
                 type="primary",
                 use_container_width=True
