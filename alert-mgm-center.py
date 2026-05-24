@@ -690,11 +690,17 @@ def render_payload_details(alert_type, payload):
 
 def edit_thresholds(alert_type, payload, config_id):
     new_payload = payload.copy()
-    st.markdown("##### Alert Thresholds")
     
     if "Cycle Time" in alert_type:
+        st.markdown("##### 'No Alert' Zone")
         new_payload['no_alert'] = st.number_input("No Alert Zone (Deviation ±%)", min_value=0, max_value=100, value=payload.get('no_alert', 5), key=f"e_ct_na_{config_id}")
-        new_payload['levels'] = st.number_input("Levels", 1, 5, payload.get('levels', 2), key=f"e_ct_lvl_{config_id}")
+        st.info(f"Production is considered **Healthy** when absolute deviation is **≤ {new_payload['no_alert']}%**.")
+        st.divider()
+
+        st.markdown("##### Configuration: Number of Levels")
+        new_payload['levels'] = st.number_input("How many alert levels do you want to configure?", min_value=1, max_value=5, value=payload.get('levels', 2), key=f"e_ct_lvl_{config_id}")
+        st.markdown("##### Deviation Threshold Boundaries")
+        st.write("Set the deviation limits for each level.")
         cols = st.columns(new_payload['levels'])
         new_limits = []
         prev_val = new_payload['no_alert']
@@ -703,15 +709,32 @@ def edit_thresholds(alert_type, payload, config_id):
                 def_val = payload.get('limits', [])[i] if i < len(payload.get('limits', [])) else prev_val + 5
                 c_min = min(200, prev_val + 1)
                 def_val = max(def_val, c_min)
-                val = st.number_input(f"Level {i+1} Limit (%)", min_value=c_min, max_value=200, value=def_val, key=f"e_ct_lim_{config_id}_{i}")
+                val = st.number_input(f"Level {i+1} Limit (±%)", min_value=c_min, max_value=200, value=def_val, key=f"e_ct_lim_{config_id}_{i}")
                 new_limits.append(val)
                 prev_val = val
         new_payload['limits'] = new_limits
-        new_payload['freq'] = st.selectbox("Frequency", ["Hourly", "Daily", "Weekly", "Monthly"], index=["Hourly", "Daily", "Weekly", "Monthly"].index(payload.get('freq', 'Daily')), key=f"e_ct_fq_{config_id}")
+
+        st.markdown("##### Alert Conditions Summary")
+        ct_disp_cols = st.columns(new_payload['levels'])
+        for i in range(new_payload['levels']):
+            with ct_disp_cols[i]:
+                lower = new_payload['no_alert'] if i == 0 else new_payload['limits'][i-1]
+                upper = new_payload['limits'][i]
+                txt = f"**Level {i+1}**\n\nTriggers when absolute deviation is between **{lower}% and {upper}%**.\n\n`(±{lower}% < deviation ≤ ±{upper}%)`"
+                display_level_box(i, txt)
+        st.divider()
+        new_payload['freq'] = st.selectbox("Alert Frequency", ["Hourly", "Daily", "Weekly", "Monthly"], index=["Hourly", "Daily", "Weekly", "Monthly"].index(payload.get('freq', 'Daily')), key=f"e_ct_fq_{config_id}")
     
     elif "Run Rate" in alert_type:
-        new_payload['no_alert'] = st.number_input("No Alert Zone (%)", 1, 100, payload.get('no_alert', 85), key=f"e_rr_na_{config_id}")
-        new_payload['levels'] = st.number_input("Levels", 1, 5, payload.get('levels', 2), key=f"e_rr_lvl_{config_id}")
+        rr_type = "Shot Efficiency" if "Shot Efficiency" in alert_type else "Time Stability"
+        st.markdown("##### 'No Alert' Zone")
+        new_payload['no_alert'] = st.number_input("No Alert Zone (Above %)", min_value=1, max_value=100, value=payload.get('no_alert', 85), key=f"e_rr_na_{config_id}")
+        st.info(f"Production is considered **Healthy** when {rr_type.lower()} is **≥ {new_payload['no_alert']}%**.")
+        st.divider()
+
+        st.markdown("##### Configuration: Number of Levels")
+        new_payload['levels'] = st.number_input("How many alert levels do you want to configure?", min_value=1, max_value=5, value=payload.get('levels', 2), key=f"e_rr_lvl_{config_id}")
+        st.markdown("##### Threshold Boundaries")
         cols = st.columns(new_payload['levels'])
         new_limits = []
         prev_val = new_payload['no_alert']
@@ -724,12 +747,28 @@ def edit_thresholds(alert_type, payload, config_id):
                 new_limits.append(val)
                 prev_val = val
         new_payload['limits'] = new_limits
-        new_payload['freq'] = st.selectbox("Frequency", ["Daily", "Weekly", "Monthly"], index=["Daily", "Weekly", "Monthly"].index(payload.get('freq', 'Daily')), key=f"e_rr_fq_{config_id}")
+
+        st.markdown("##### Alert Conditions Summary")
+        rr_disp_cols = st.columns(new_payload['levels'])
+        for i in range(new_payload['levels']):
+            with rr_disp_cols[i]:
+                upper = new_payload['no_alert'] if i == 0 else new_payload['limits'][i-1]
+                lower = new_payload['limits'][i]
+                op = "≤" if i == 0 else "<"
+                txt = f"**Level {i+1}**\n\nTriggers when rate drops between **{lower}% and {upper}%**.\n\n`{lower}% ≤ rate {op} {upper}%`"
+                display_level_box(i, txt)
+        st.divider()
+        new_payload['freq'] = st.selectbox("Alert Frequency", ["Daily", "Weekly", "Monthly"], index=["Daily", "Weekly", "Monthly"].index(payload.get('freq', 'Daily')), key=f"e_rr_fq_{config_id}")
         
     elif "Capacity Risk" in alert_type:
         if "Target" in alert_type:
-            new_payload['target_cap'] = st.number_input("Target Capacity (%)", 1, 100, payload.get('target_cap', 90), key=f"e_cr_tgt_{config_id}")
-        new_payload['levels'] = st.number_input("Levels", 1, 5, payload.get('levels', 2), key=f"e_cr_lvl_{config_id}")
+            new_payload['target_cap'] = st.number_input("Target Capacity Output (%)", min_value=1, max_value=100, value=payload.get('target_cap', 90), key=f"e_cr_tgt_{config_id}")
+            st.info(f"Calculations will be evaluated against **{new_payload['target_cap']}%** capacity output.")
+            st.divider()
+
+        st.markdown("##### Configuration: Number of Levels")
+        new_payload['levels'] = st.number_input("How many alert levels do you want to configure?", min_value=1, max_value=5, value=payload.get('levels', 2), key=f"e_cr_lvl_{config_id}")
+        st.markdown("##### Threshold Boundaries")
         cols = st.columns(new_payload['levels'])
         new_limits = []
         prev_val = 0
@@ -742,18 +781,32 @@ def edit_thresholds(alert_type, payload, config_id):
                 new_limits.append(val)
                 prev_val = val
         new_payload['limits'] = new_limits
-        new_payload['freq'] = st.selectbox("Frequency", ["Daily", "Weekly", "Monthly"], index=["Daily", "Weekly", "Monthly"].index(payload.get('freq', 'Daily')), key=f"e_cr_fq_{config_id}")
+
+        st.markdown("##### Alert Conditions Summary")
+        cr_disp_cols = st.columns(new_payload['levels'])
+        for i in range(new_payload['levels']):
+            with cr_disp_cols[i]:
+                lower = 0 if i == 0 else new_payload['limits'][i-1]
+                upper = new_payload['limits'][i]
+                op = "≤" if i == 0 else "<"
+                txt = f"**Level {i+1}**\n\nTriggers when capacity loss is between **{lower}% and {upper}%**.\n\n`{lower}% {op} loss ≤ {upper}%`"
+                display_level_box(i, txt)
+        st.divider()
+        new_payload['freq'] = st.selectbox("Alert Frequency", ["Daily", "Weekly", "Monthly"], index=["Daily", "Weekly", "Monthly"].index(payload.get('freq', 'Daily')), key=f"e_cr_fq_{config_id}")
         
     elif "Tooling End of Life" in alert_type:
-        new_payload['mode'] = st.radio("Evaluation Mode", ["Utilization Rate (%)", "Remaining Days", "Combination (Whichever comes first)"], index=["Utilization Rate (%)", "Remaining Days", "Combination (Whichever comes first)"].index(payload.get('mode', "Utilization Rate (%)")), key=f"e_eol_mod_{config_id}")
-        new_payload['levels'] = st.number_input("Levels", 1, 5, payload.get('levels', 2), key=f"e_eol_lvl_{config_id}")
+        new_payload['mode'] = st.radio("Choose how End of Life alerts should be evaluated:", ["Utilization Rate (%)", "Remaining Days", "Combination (Whichever comes first)"], index=["Utilization Rate (%)", "Remaining Days", "Combination (Whichever comes first)"].index(payload.get('mode', "Utilization Rate (%)")), horizontal=True, key=f"e_eol_mod_{config_id}")
+        st.divider()
+
+        new_payload['levels'] = st.number_input("How many alert levels do you want to configure?", min_value=1, max_value=5, value=payload.get('levels', 2), key=f"e_eol_lvl_{config_id}")
+        st.markdown("##### Threshold Boundaries")
         
         show_util = "Utilization" in new_payload['mode'] or "Combination" in new_payload['mode']
         show_days = "Days" in new_payload['mode'] or "Combination" in new_payload['mode']
         
         new_util_limits, new_days_limits = [], []
         if show_util:
-            new_payload['base'] = st.number_input("Start Monitoring At (%)", 0, 99, payload.get('base', 80), key=f"e_eol_base_{config_id}")
+            new_payload['base'] = st.number_input("Start Monitoring At (% of forecasted max shot)", min_value=0, max_value=99, value=payload.get('base', 80), key=f"e_eol_base_{config_id}")
             cols = st.columns(new_payload['levels'])
             prev_val = new_payload['base']
             for i in range(new_payload['levels']):
@@ -761,10 +814,11 @@ def edit_thresholds(alert_type, payload, config_id):
                     def_val = payload.get('util_limits', [])[i] if i < len(payload.get('util_limits', [])) else prev_val + 10
                     c_min = min(200, prev_val + 1)
                     def_val = max(def_val, c_min)
-                    val = st.number_input(f"L{i+1} Util Limit (%)", min_value=c_min, max_value=200, value=def_val, key=f"e_eol_ulim_{config_id}_{i}")
+                    val = st.number_input(f"Level {i+1} Upper Limit (%)", min_value=c_min, max_value=200, value=def_val, key=f"e_eol_ulim_{config_id}_{i}")
                     new_util_limits.append(val)
                     prev_val = val
             new_payload['util_limits'] = new_util_limits
+            st.write("")
             
         if show_days:
             cols = st.columns(new_payload['levels'])
@@ -774,18 +828,42 @@ def edit_thresholds(alert_type, payload, config_id):
                     def_val = payload.get('days_limits', [])[i] if i < len(payload.get('days_limits', [])) else max(0, prev_val - 15)
                     c_max = max(0, prev_val - 1)
                     def_val = min(def_val, c_max)
-                    val = st.number_input(f"L{i+1} Days Limit", min_value=0, max_value=c_max, value=def_val, key=f"e_eol_dlim_{config_id}_{i}")
+                    val = st.number_input(f"Level {i+1} Remaining Days Limit", min_value=0, max_value=c_max, value=def_val, key=f"e_eol_dlim_{config_id}_{i}")
                     new_days_limits.append(val)
                     prev_val = val
             new_payload['days_limits'] = new_days_limits
-            
-        new_payload['freq'] = st.selectbox("Frequency", ["Daily", "Weekly", "Monthly"], index=["Daily", "Weekly", "Monthly"].index(payload.get('freq', 'Daily')), key=f"e_eol_fq_{config_id}")
+
+        st.markdown("##### Alert Conditions Summary")
+        eol_disp_cols = st.columns(new_payload['levels'])
+        for i in range(new_payload['levels']):
+            with eol_disp_cols[i]:
+                conds = []
+                if show_util:
+                    lower = new_payload['base'] if i == 0 else new_payload['util_limits'][i-1]
+                    upper = new_payload['util_limits'][i]
+                    op = "≤" if i == 0 else "<"
+                    conds.append(f"Shots are between **{lower}% and {upper}%** of max shot.\n\n`{lower}% {op} shots ≤ {upper}%`")
+                if show_days:
+                    upper_d = 365 if i == 0 else new_payload['days_limits'][i-1]
+                    lower_d = new_payload['days_limits'][i]
+                    conds.append(f"Remaining days fall between **{upper_d} and {lower_d} days**.")
+                txt = f"**Level {i+1}**\n\nTriggers when:\n\n" + "\n\n**OR**\n\n".join(conds)
+                display_level_box(i, txt)
+        st.divider()
+        new_payload['freq'] = st.selectbox("Alert Frequency", ["Daily", "Weekly", "Monthly"], index=["Daily", "Weekly", "Monthly"].index(payload.get('freq', 'Daily')), key=f"e_eol_fq_{config_id}")
 
     elif "Operation Status" in alert_type:
+        st.markdown("##### Real-Time Event Alerts")
         new_payload['producing'] = st.checkbox("Tool Starts Producing", value=payload.get('producing', True), key=f"e_os_p_{config_id}")
+        st.write("")
         new_payload['stops'] = st.checkbox("Tool Stops", value=payload.get('stops', False), key=f"e_os_s_{config_id}")
-        new_payload['triggers'] = st.multiselect("Connectivity Triggers", ["Sensor offline", "Inactive", "Sensor detached"], default=payload.get('triggers', ["Sensor offline"]), key=f"e_os_t_{config_id}")
-        new_payload['freq'] = st.selectbox("Frequency", ["Daily", "Weekly", "Monthly", "Real time"], index=["Daily", "Weekly", "Monthly", "Real time"].index(payload.get('freq', 'Real time')), key=f"e_os_f_{config_id}")
+        st.divider()
+        st.markdown("##### Connectivity & Status-Based Alerts")
+        c1, c2 = st.columns(2)
+        with c1:
+            new_payload['triggers'] = st.multiselect("Trigger when tools remain in:", ["Sensor offline", "Inactive", "Sensor detached"], default=payload.get('triggers', ["Sensor offline"]), key=f"e_os_t_{config_id}")
+        with c2:
+            new_payload['freq'] = st.selectbox("Alert Frequency", ["Daily", "Weekly", "Monthly", "Real time"], index=["Daily", "Weekly", "Monthly", "Real time"].index(payload.get('freq', 'Real time')), key=f"e_os_f_{config_id}")
 
     return new_payload
 
@@ -793,7 +871,8 @@ def edit_thresholds(alert_type, payload, config_id):
 @st.dialog("Edit Configuration", width="large")
 def edit_config_popup(config_id, row_data):
     st.write(f"Editing settings for **{config_id}**")
-    st.markdown("##### General Settings")
+    
+    st.markdown("### User Assignment")
     new_server = st.selectbox("Target Server", list(MOCK_USERS.keys()), index=list(MOCK_USERS.keys()).index(row_data['Server']))
     
     # Parse existing users into a list for the multiselect default
@@ -803,7 +882,7 @@ def edit_config_popup(config_id, row_data):
     # Ensure defaults are valid for the currently selected server to avoid Streamlit errors
     valid_defaults = [u for u in existing_users_list if u in available_users]
     
-    new_users_list = st.multiselect("Assigned Users", options=available_users, default=valid_defaults, help="Search and select users")
+    new_users_list = st.multiselect("Select User(s)", options=available_users, default=valid_defaults, help="Search and select users")
     new_users = ", ".join(new_users_list)
     
     st.divider()
@@ -1298,18 +1377,18 @@ elif page == "Client Alerts Portal":
         if client_filters.get("Part"): df = df[df['Part'].isin(client_filters["Part"])]
         if client_filters.get("Tooling"): df = df[df['Tool'].isin(client_filters["Tooling"])]
         
-        search_query = st.text_input("🔍 Search (Tooling ID, Part ID, Part Name)")
+        search_query = st.text_input("Search (Tooling ID, Part ID, Part Name)")
         if search_query:
             df = df[df.apply(lambda row: row.astype(str).str.contains(search_query, case=False).any(), axis=1)]
 
         st.write("")
         
         def render_tab_export_button(tab_id, df_subset, filename_prefix):
-            with st.popover("📥 Export Tab Data", use_container_width=True):
+            with st.popover("Export Tab Data", use_container_width=True):
                 st.caption(f"Export {len(df_subset)} filtered alerts.")
                 zip_file_bytes = generate_client_csv_zip(df_subset)
                 st.download_button(
-                    label="⬇️ Download CSV Zip",
+                    label="Download CSV Zip",
                     data=zip_file_bytes,
                     file_name=f"{filename_prefix}_export_{datetime.datetime.now().strftime('%Y%m%d')}.zip",
                     mime="application/zip",
@@ -1317,7 +1396,7 @@ elif page == "Client Alerts Portal":
                     key=f"client_csv_dl_{tab_id}"
                 )
                 st.divider()
-                st.write("✉️ Send to Email")
+                st.write("Send to Email")
                 email_input = st.text_input("Email Address", value="user@client.com", key=f"client_email_in_{tab_id}", label_visibility="collapsed")
                 if st.button("Send Now", type="primary", use_container_width=True, key=f"client_email_btn_{tab_id}"):
                     st.success(f"Sent successfully to {email_input}!")
@@ -1342,7 +1421,7 @@ elif page == "Client Alerts Portal":
                 
             base_cols = {"Tool": "Tooling ID", "Part": "Part ID (Part Name)", "OEM Division": "OEM Business Division", "Supplier": "Supplier", "Plant": "Plant", "Tooling Type": "Tooling Type", "Severity": "Severity"}
             for sev in sorted(filtered_df['Severity'].unique(), reverse=True):
-                st.markdown(f"#### 📌 {sev}")
+                st.markdown(f"#### {sev}")
                 sev_df = filtered_df[filtered_df['Severity'] == sev]
                 
                 for a_type in sorted(sev_df['Alert Type'].unique()):
@@ -1542,12 +1621,12 @@ elif page == "Client Alerts Portal":
         
         c1, c2 = st.columns([8, 2])
         with c2:
-            with st.popover("📥 Export Dashboard", use_container_width=True):
+            with st.popover("Export Dashboard", use_container_width=True):
                 st.caption("Export Executive Dashboard PDF.")
                 if FPDF_AVAILABLE and MATPLOTLIB_AVAILABLE:
                     pdf_data = generate_client_dashboard_pdf(df)
                     st.download_button(
-                        label="⬇️ Download PDF Dashboard",
+                        label="Download PDF Dashboard",
                         data=pdf_data,
                         file_name=f"alert_center_dashboard_{datetime.datetime.now().strftime('%Y%m%d')}.pdf",
                         mime="application/pdf",
@@ -1555,9 +1634,9 @@ elif page == "Client Alerts Portal":
                         key="client_pdf_dl_ov"
                     )
                 else:
-                    st.warning("⚠️ FPDF or Matplotlib missing.")
+                    st.warning("FPDF or Matplotlib missing.")
                 st.divider()
-                st.write("✉️ Send to Email")
+                st.write("Send to Email")
                 email_input = st.text_input("Email Address", value="user@client.com", key="client_email_in_ov", label_visibility="collapsed")
                 if st.button("Send Now", type="primary", use_container_width=True, key="client_email_btn_ov"):
                     st.success(f"Sent successfully to {email_input}!")
