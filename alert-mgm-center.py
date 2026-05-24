@@ -636,10 +636,17 @@ def render_payload_details(alert_type, payload):
     elif "Run Rate" in alert_type:
         st.write(f"**No Alert Zone:** ≥ {payload.get('no_alert')}%")
         st.write(f"**Levels Configured:** {payload.get('levels')}")
+        
+        metric_name = "rate"
+        if "Shot Efficiency" in alert_type:
+            metric_name = "efficiency"
+        elif "Time Stability" in alert_type:
+            metric_name = "stability"
+            
         limits = payload.get('limits', [])
         for i, limit in enumerate(limits):
             upper = payload.get('no_alert') if i == 0 else limits[i-1]
-            st.write(f"- **Level {i+1}:** {limit}% ≤ rate < {upper}%")
+            st.write(f"- **Level {i+1}:** {limit}% ≤ {metric_name} < {upper}%")
             
     elif "Capacity Risk" in alert_type:
         if "Target" in alert_type:
