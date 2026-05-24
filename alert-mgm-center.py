@@ -651,34 +651,39 @@ def render_payload_details(alert_type, payload):
             st.write(f"- **Level {i+1}:** {lower}% < loss ≤ {limit}%")
             
     elif "Tooling End of Life" in alert_type:
-        st.write(f"**Evaluation Mode:** {payload.get('mode')}")
         st.write(f"**Levels Configured:** {payload.get('levels')}")
-        show_util = "Utilization" in payload.get('mode', '') or "Combination" in payload.get('mode', '')
-        show_days = "Days" in payload.get('mode', '') or "Combination" in payload.get('mode', '')
         
         for i in range(payload.get('levels', 1)):
-            conds = []
-            if show_util:
+            if "Utilization Rate" in alert_type and "Combination" not in alert_type:
                 u_lims = payload.get('util_limits', [])
                 lower = payload.get('base') if i == 0 else u_lims[i-1]
                 upper = u_lims[i] if i < len(u_lims) else 'MAX'
-                conds.append(f"Shots: {lower}% to {upper}%")
-            if show_days:
+                st.write(f"- **Level {i+1}:** {lower}% < utilization rate ≤ {upper}%")
+            elif "Remaining Days" in alert_type and "Combination" not in alert_type:
                 d_lims = payload.get('days_limits', [])
                 upper_d = 365 if i == 0 else d_lims[i-1]
                 lower_d = d_lims[i] if i < len(d_lims) else 0
-                conds.append(f"Days left: {lower_d} to {upper_d}")
-            st.write(f"- **Level {i+1}:** " + " OR ".join(conds))
+                st.write(f"- **Level {i+1}:** {lower_d} < remaining days ≤ {upper_d}")
+            else: # Combination
+                u_lims = payload.get('util_limits', [])
+                lower = payload.get('base') if i == 0 else u_lims[i-1]
+                upper = u_lims[i] if i < len(u_lims) else 'MAX'
+                
+                d_lims = payload.get('days_limits', [])
+                upper_d = 365 if i == 0 else d_lims[i-1]
+                lower_d = d_lims[i] if i < len(d_lims) else 0
+                
+                st.write(f"- **Level {i+1}:** Utilization Rate: {lower}% to {upper}% or Remaining Days: {lower_d} to {upper_d}")
             
     elif "Operation Status" in alert_type:
         st.write(f"**Tool Starts Producing Alert:** {'Enabled' if payload.get('producing') else 'Disabled'}")
         st.write(f"**Tool Stops Alert:** {'Enabled' if payload.get('stops') else 'Disabled'}")
-        st.write(f"**Connectivity Triggers:** {', '.join(payload.get('triggers', []))}")
+        st.write(f"**Connectivity & Status-Based Alerts:** {', '.join(payload.get('triggers', []))}")
 
 
 def edit_thresholds(alert_type, payload, config_id):
     new_payload = payload.copy()
-    st.markdown("##### ⚙️ Alert Thresholds")
+    st.markdown("##### Alert Thresholds")
     
     if "Cycle Time" in alert_type:
         new_payload['no_alert'] = st.number_input("No Alert Zone (Deviation ±%)", min_value=0, max_value=100, value=payload.get('no_alert', 5), key=f"e_ct_na_{config_id}")
@@ -778,7 +783,7 @@ def edit_thresholds(alert_type, payload, config_id):
     return new_payload
 
 # --- EDIT AND DELETE DIALOGS (GLOBAL DASHBOARD) ---
-@st.dialog("✏️ Edit Configuration", width="large")
+@st.dialog("Edit Configuration", width="large")
 def edit_config_popup(config_id, row_data):
     st.write(f"Editing settings for **{config_id}**")
     st.markdown("##### General Settings")
@@ -810,7 +815,7 @@ def edit_config_popup(config_id, row_data):
             st.session_state.admin_log.at[idx, 'Timestamp'] = datetime.datetime.now().strftime("%Y-%m-%d %H:%M:%S") + " (Edited)"
             st.rerun()
 
-@st.dialog("🗑️ Delete Configuration")
+@st.dialog("Delete Configuration")
 def delete_config_popup(config_id):
     st.warning(f"Are you sure you want to permanently delete **{config_id}**?")
     st.write("This action will immediately remove the alert configuration for all assigned users.")
@@ -993,7 +998,7 @@ if page == "Configuration Setup":
                     st.divider()
                     rr_freq = st.selectbox("Alert Frequency", ["Daily", "Weekly", "Monthly"], key=f"{prefix}_freq")
                 if st.button(f"Save {rr_type} Settings", type="primary", key=f"{prefix}_save"):
-                    log_admin_action(f"Low Run Rate - {rr_type}", user_filters, selected_server, selected_users, {"no_alert": no_alert_zone, "levels": rr_num, "limits": rr_limits, "freq": rr_freq})
+                    log_admin_action(f"Run Rate - Low Run Rate {rr_type}", user_filters, selected_server, selected_users, {"no_alert": no_alert_zone, "levels": rr_num, "limits": rr_limits, "freq": rr_freq})
 
             with rr_tab1: render_run_rate_logic("Shot Efficiency", "eff")
             with rr_tab2: render_run_rate_logic("Time Stability", "stab")
@@ -1003,7 +1008,7 @@ if page == "Configuration Setup":
         st.subheader("Capacity Risk Alerts")
         cr_enabled = st.toggle("Enable Capacity Risk Alerts", value=True, key="cr_toggle")
         if cr_enabled:
-            cr_tab1, cr_tab2 = st.tabs(["Lost parts vs Optimal Capacity", "Lost parts vs Target Capacity"])
+            cr_tab1, cr_tab2 = st.tabs(["Loss Parts vs Optimal Capacity", "Loss Parts vs Target Capacity"])
             def render_capacity_logic(cr_type, prefix, is_target=False):
                 with st.container(border=True):
                     target_cap = 100
@@ -1037,7 +1042,7 @@ if page == "Configuration Setup":
                 if st.button(f"Save {cr_type} Settings", type="primary", key=f"{prefix}_save"):
                     payload = {"levels": cr_num, "limits": cr_limits, "freq": cr_freq}
                     if is_target: payload["target_cap"] = target_cap
-                    log_admin_action(f"Capacity Risk ({cr_type})", user_filters, selected_server, selected_users, payload)
+                    log_admin_action(f"Capacity Risk - Loss Parts vs {cr_type} Capacity", user_filters, selected_server, selected_users, payload)
 
             with cr_tab1: render_capacity_logic("Optimal", "opt")
             with cr_tab2: render_capacity_logic("Target", "tgt", is_target=True)
@@ -1096,7 +1101,8 @@ if page == "Configuration Setup":
                 st.divider()
                 eol_freq = st.selectbox("Alert Frequency", ["Daily", "Weekly", "Monthly"], key="eol_freq")
             if st.button("Save Tooling EOL Settings", type="primary"):
-                log_admin_action("Tooling End of Life", user_filters, selected_server, selected_users, {"mode": eol_mode, "levels": eol_num, "util_limits": util_limits, "days_limits": days_limits, "base": base_start, "freq": eol_freq})
+                clean_eol_mode = eol_mode.replace(" (%)", "")
+                log_admin_action(f"Tooling End of Life - {clean_eol_mode}", user_filters, selected_server, selected_users, {"mode": eol_mode, "levels": eol_num, "util_limits": util_limits, "days_limits": days_limits, "base": base_start, "freq": eol_freq})
 
     # --- 5. OPERATION STATUS ---
     with tab5:
@@ -1125,7 +1131,7 @@ elif page == "Configuration Management":
     st.markdown('<div class="main-header">Configuration Management</div>', unsafe_allow_html=True)
     st.markdown('<div class="sub-header">A comprehensive view of all active alert configurations across all servers and user groups.</div>', unsafe_allow_html=True)
     
-    st.markdown("### 📧 Automated Alert Summary (Simulation)")
+    st.markdown("### Automated Alert Summary (Simulation)")
     st.write("Generate a simulated PDF attachment for automated digest emails sent to clients.")
     
     sim_col1, sim_col2 = st.columns([3, 7])
@@ -1147,7 +1153,7 @@ elif page == "Configuration Management":
                 export_filename = f"eMoldino Monthly Alert Summary - {now.strftime('%B')}, {now.year}.pdf"
                 
             st.download_button(
-                label=f"⬇️ Generate & Download {sim_freq} Alert Summary PDF", 
+                label=f"Generate & Download {sim_freq} Alert Summary PDF", 
                 data=pdf_bytes, 
                 file_name=export_filename, 
                 mime="application/pdf", 
@@ -1186,7 +1192,7 @@ elif page == "Configuration Management":
         
         display_df['Display Alert Type'] = display_df['Alert Type'].apply(simplify_alert_type)
         
-        st.markdown("##### 🔍 Active Configurations")
+        st.markdown("##### Active Configurations")
         f_col1, f_col2, f_col3 = st.columns(3)
         with f_col1:
             server_filter = st.multiselect("Filter by Server", options=display_df['Server'].unique(), default=[])
@@ -1197,7 +1203,7 @@ elif page == "Configuration Management":
         if server_filter: display_df = display_df[display_df['Server'].isin(server_filter)]
         if alert_filter: display_df = display_df[display_df['Display Alert Type'].isin(alert_filter)]
         
-        st.write("👆 **Click on any row in the table below to view, edit, or delete its configuration.**")
+        st.write("**Click on any row in the table below to view, edit, or delete its configuration.**")
         
         # Prepare the visual table rendering
         table_display = display_df.copy()
@@ -1219,7 +1225,7 @@ elif page == "Configuration Management":
         except Exception:
             # Fallback for Streamlit versions < 1.35
             st.dataframe(table_display, use_container_width=True, hide_index=True)
-            st.markdown("### ⚙️ Select a Configuration")
+            st.markdown("### Select a Configuration")
             selected_config_id = st.selectbox(
                 "Select a configuration to View, Edit, or Delete:", 
                 display_df['Config ID'].tolist(),
@@ -1245,16 +1251,16 @@ elif page == "Configuration Management":
                 st.divider()
                 
                 # --- Advanced Threshold View Section ---
-                st.markdown("##### ⚙️ Alert Thresholds & Logic")
+                st.markdown("##### Alert Thresholds & Logic")
                 render_payload_details(sel_row['Alert Type'], sel_row.get('Config Payload', {}))
                 
                 st.divider()
                 bc1, bc2, bc3 = st.columns([1, 1, 4])
                 
-                if bc1.button("✏️ Edit", key=f"edit_{selected_config_id}", use_container_width=True):
+                if bc1.button("Edit", key=f"edit_{selected_config_id}", use_container_width=True):
                     edit_config_popup(selected_config_id, sel_row)
                     
-                if bc2.button("🗑️ Delete", key=f"del_{selected_config_id}", use_container_width=True):
+                if bc2.button("Delete", key=f"del_{selected_config_id}", use_container_width=True):
                     delete_config_popup(selected_config_id)
 
 # ==========================================
