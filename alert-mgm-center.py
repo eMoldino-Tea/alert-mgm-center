@@ -1465,30 +1465,67 @@ elif page == "Client Alerts Portal":
     # ---------------------------------------------------------
     def show_alert_detail(row):
         st.markdown(f"#### Alert Detail: `{row['Alert ID']}`")
-        c1, c2, c3 = st.columns(3)
-        c1.write(f"**Alert Name:** {row['Alert Name']}")
-        c1.write(f"**Date/Time:** {row['Date/Time']}")
-        c1.write(f"**Status:** {row['Status']}")
-        
-        c2.write(f"**Level:** {row['Severity']}")
-        c2.write(f"**Alert Type:** {row['Alert Type']}")
-        c2.write(f"**Frequency:** {row['Frequency']}")
-        
-        c3.write(f"**Tool:** {row['Tool']}")
-        c3.write(f"**Part:** {row['Part']}")
-        c3.write(f"**Plant:** {row['Plant']}")
-        
         st.divider()
-        sc1, sc2 = st.columns(2)
-        sc1.markdown("##### Target Scope")
-        sc1.write(f"- **OEM Division:** {row['OEM Division']}")
-        sc1.write(f"- **Supplier:** {row['Supplier']}")
-        sc1.write(f"- **Tooling Type:** {row['Tooling Type']}")
         
-        sc2.markdown("##### Trigger Condition & Management")
-        metric_val = format_trigger_value(row)
-        sc2.write(f"- **Recorded Value:** {metric_val}")
-        sc2.write(f"- **Owner:** {row['Owner']}")
+        c1, c2 = st.columns(2)
+        with c1:
+            st.markdown("##### Tooling Information")
+            st.write(f"**Tooling ID:** {row['Tool']}")
+            st.write(f"**OEM Business Division:** {row['OEM Division']}")
+            st.write(f"**Supplier:** {row['Supplier']}")
+            st.write(f"**Plant:** {row['Plant']}")
+            st.write(f"**Part ID (Part Name):** {row['Part']}")
+            st.write(f"**Tooling Type:** {row['Tooling Type']}")
+
+        with c2:
+            st.markdown("##### Alert Information")
+            
+            raw_type = row['Alert Type']
+            display_type = raw_type
+            if raw_type == "Low Run Rate - Shot Efficiency":
+                display_type = "Run Rate - Low Run Rate Shot Efficiency"
+            elif raw_type == "Low Run Rate - Time Stability":
+                display_type = "Run Rate - Low Run Rate Time Stability"
+            elif raw_type == "Capacity Risk (Optimal)":
+                display_type = "Capacity Risk - Loss Parts vs Optimal Capacity"
+            elif raw_type == "Capacity Risk (Target)":
+                display_type = "Capacity Risk - Loss Parts vs Target Capacity"
+            elif raw_type == "Tooling EOL (Utilization)":
+                display_type = "Tooling End of Life - Utilization Rate"
+            elif raw_type == "Tooling EOL (Remaining Days)":
+                display_type = "Tooling End of Life - Remaining Days"
+            elif raw_type == "Tooling EOL (Combination)":
+                display_type = "Tooling End of Life - Combination (Whichever Comes First)"
+            elif "Operation Status" in raw_type:
+                display_type = "Operation Status"
+                
+            st.write(f"**Alert Name:** {display_type}")
+            if "Operation Status" not in raw_type:
+                st.write(f"**Severity:** {row['Severity']}")
+            
+            # Dynamic Value
+            if "Cycle Time" in display_type:
+                st.write(f"**% of Deviation:** {row['Metric_1']}")
+            elif "Shot Efficiency" in display_type:
+                st.write(f"**Run Rate Shot Efficiency:** {row['Metric_1']}")
+            elif "Time Stability" in display_type:
+                st.write(f"**Run Rate Time Stability:** {row['Metric_1']}")
+            elif "Capacity Risk" in display_type:
+                st.write(f"**% of Loss:** {row['Metric_1']}")
+            elif "Utilization Rate" in display_type and "Combination" not in display_type:
+                st.write(f"**Utilization Rate:** {row['Metric_1']}")
+            elif "Remaining Days" in display_type and "Combination" not in display_type:
+                st.write(f"**Remaining Days:** {row['Metric_1']}")
+            elif "Combination" in display_type:
+                st.write(f"**Utilization Rate:** {row['Metric_1']}")
+                val_2 = row['Metric_2'] if pd.notna(row['Metric_2']) and str(row['Metric_2']).strip() else 'N/A'
+                st.write(f"**Remaining Days:** {val_2}")
+            elif "Operation Status" in raw_type:
+                status_event = raw_type.replace("Operation Status (", "").replace(")", "")
+                st.write(f"**{status_event}:** {row['Date/Time']}")
+                
+            st.write(f"**Date/Time:** {row['Date/Time']}")
+            st.write(f"**Frequency:** {row['Frequency']}")
 
     @st.dialog("High Risk Alerts", width="large")
     def act_now_popup(tool_name, tool_alerts_df):
