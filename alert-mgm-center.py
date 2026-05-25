@@ -1463,12 +1463,53 @@ elif page == "Client Alerts Portal":
     # ---------------------------------------------------------
     # INTERACTIVE POPUP DIALOGS
     # ---------------------------------------------------------
+    def show_alert_detail(row):
+        st.markdown(f"#### Alert Detail: `{row['Alert ID']}`")
+        c1, c2, c3 = st.columns(3)
+        c1.write(f"**Alert Name:** {row['Alert Name']}")
+        c1.write(f"**Date/Time:** {row['Date/Time']}")
+        c1.write(f"**Status:** {row['Status']}")
+        
+        c2.write(f"**Level:** {row['Severity']}")
+        c2.write(f"**Alert Type:** {row['Alert Type']}")
+        c2.write(f"**Frequency:** {row['Frequency']}")
+        
+        c3.write(f"**Tool:** {row['Tool']}")
+        c3.write(f"**Part:** {row['Part']}")
+        c3.write(f"**Plant:** {row['Plant']}")
+        
+        st.divider()
+        sc1, sc2 = st.columns(2)
+        sc1.markdown("##### Target Scope")
+        sc1.write(f"- **OEM Division:** {row['OEM Division']}")
+        sc1.write(f"- **Supplier:** {row['Supplier']}")
+        sc1.write(f"- **Tooling Type:** {row['Tooling Type']}")
+        
+        sc2.markdown("##### Trigger Condition & Management")
+        metric_val = format_trigger_value(row)
+        sc2.write(f"- **Recorded Value:** {metric_val}")
+        sc2.write(f"- **Owner:** {row['Owner']}")
+
     @st.dialog("High Risk Alerts", width="large")
     def act_now_popup(tool_name, tool_alerts_df):
         st.markdown(f"### {tool_name}")
+        st.write("**Click on an alert below to view its detailed information.**")
         sorted_df = tool_alerts_df.sort_values(by='Risk Score', ascending=False)
-        disp = sorted_df[['Alert Type', 'Severity', 'Frequency', 'Date/Time']].rename(columns={'Severity': 'Level'})
-        st.dataframe(disp, hide_index=True, use_container_width=True)
+        disp = sorted_df[['Alert ID', 'Alert Type', 'Severity', 'Frequency', 'Date/Time']].rename(columns={'Severity': 'Level'})
+        
+        try:
+            event = st.dataframe(disp, hide_index=True, use_container_width=True, on_select="rerun", selection_mode="single-row")
+            if event.selection.rows:
+                selected_row = sorted_df.iloc[event.selection.rows[0]]
+                st.divider()
+                show_alert_detail(selected_row)
+        except Exception:
+            st.dataframe(disp, hide_index=True, use_container_width=True)
+            selected_alert_id = st.selectbox("Select Alert ID to view details:", sorted_df['Alert ID'].tolist())
+            if selected_alert_id:
+                selected_row = sorted_df[sorted_df['Alert ID'] == selected_alert_id].iloc[0]
+                st.divider()
+                show_alert_detail(selected_row)
 
     @st.dialog("Alert Details", width="large")
     def category_popup(a_type_label, level, level_df):
@@ -1476,10 +1517,13 @@ elif page == "Client Alerts Portal":
         if level_df.empty:
             st.info("No alerts found for this selection.")
             return
+            
+        st.write("**Click on an alert below to view its detailed information.**")
         level_df = level_df.copy()
         level_df['Exact calculation/value'] = level_df.apply(format_trigger_value, axis=1)
         
         display_cols = {
+            "Alert ID": "Alert ID",
             "Tool": "Tooling ID", "Part": "Part ID (Part Name)", 
             "OEM Division": "OEM Business Division", "Supplier": "Supplier", 
             "Plant": "Plant", "Tooling Type": "Tooling Type"
@@ -1498,8 +1542,22 @@ elif page == "Client Alerts Portal":
 
         display_cols["Date/Time"] = "Date & Time" 
 
-        out_df = level_df.sort_values(by='Risk Score', ascending=False)[list(display_cols.keys())].rename(columns=display_cols)
-        st.dataframe(out_df, hide_index=True, use_container_width=True)
+        sorted_df = level_df.sort_values(by='Risk Score', ascending=False)
+        out_df = sorted_df[list(display_cols.keys())].rename(columns=display_cols)
+        
+        try:
+            event = st.dataframe(out_df, hide_index=True, use_container_width=True, on_select="rerun", selection_mode="single-row")
+            if event.selection.rows:
+                selected_row = sorted_df.iloc[event.selection.rows[0]]
+                st.divider()
+                show_alert_detail(selected_row)
+        except Exception:
+            st.dataframe(out_df, hide_index=True, use_container_width=True)
+            selected_alert_id = st.selectbox("Select Alert ID to view details:", sorted_df['Alert ID'].tolist())
+            if selected_alert_id:
+                selected_row = sorted_df[sorted_df['Alert ID'] == selected_alert_id].iloc[0]
+                st.divider()
+                show_alert_detail(selected_row)
 
     @st.dialog("Top Tool Details", width="large")
     def top_tool_popup(tool_id, subset):
@@ -1507,24 +1565,72 @@ elif page == "Client Alerts Portal":
         plant = subset['Plant'].iloc[0] if not subset.empty else "N/A"
         st.markdown(f"### {tool_id}")
         st.markdown(f"**Supplier:** {supplier} | **Plant:** {plant}")
-        disp = subset.sort_values('Risk Score', ascending=False)[['Alert Type', 'Severity', 'Frequency', 'Date/Time']].rename(columns={'Severity': 'Level'})
-        st.dataframe(disp, hide_index=True, use_container_width=True)
+        st.write("**Click on an alert below to view its detailed information.**")
+        
+        sorted_df = subset.sort_values('Risk Score', ascending=False)
+        disp = sorted_df[['Alert ID', 'Alert Type', 'Severity', 'Frequency', 'Date/Time']].rename(columns={'Severity': 'Level'})
+        
+        try:
+            event = st.dataframe(disp, hide_index=True, use_container_width=True, on_select="rerun", selection_mode="single-row")
+            if event.selection.rows:
+                selected_row = sorted_df.iloc[event.selection.rows[0]]
+                st.divider()
+                show_alert_detail(selected_row)
+        except Exception:
+            st.dataframe(disp, hide_index=True, use_container_width=True)
+            selected_alert_id = st.selectbox("Select Alert ID to view details:", sorted_df['Alert ID'].tolist())
+            if selected_alert_id:
+                selected_row = sorted_df[sorted_df['Alert ID'] == selected_alert_id].iloc[0]
+                st.divider()
+                show_alert_detail(selected_row)
 
     @st.dialog("Top Plant Details", width="large")
     def top_plant_popup(plant, subset):
         supplier = subset['Supplier'].iloc[0] if not subset.empty else "N/A"
         st.markdown(f"### {plant}")
         st.markdown(f"**Supplier:** {supplier}")
-        disp = subset.sort_values('Risk Score', ascending=False)[['Tool', 'Alert Type', 'Severity', 'Frequency', 'Date/Time']].rename(columns={'Tool':'Tooling ID', 'Severity': 'Level'})
-        st.dataframe(disp, hide_index=True, use_container_width=True)
+        st.write("**Click on an alert below to view its detailed information.**")
+        
+        sorted_df = subset.sort_values('Risk Score', ascending=False)
+        disp = sorted_df[['Alert ID', 'Tool', 'Alert Type', 'Severity', 'Frequency', 'Date/Time']].rename(columns={'Tool':'Tooling ID', 'Severity': 'Level'})
+        
+        try:
+            event = st.dataframe(disp, hide_index=True, use_container_width=True, on_select="rerun", selection_mode="single-row")
+            if event.selection.rows:
+                selected_row = sorted_df.iloc[event.selection.rows[0]]
+                st.divider()
+                show_alert_detail(selected_row)
+        except Exception:
+            st.dataframe(disp, hide_index=True, use_container_width=True)
+            selected_alert_id = st.selectbox("Select Alert ID to view details:", sorted_df['Alert ID'].tolist())
+            if selected_alert_id:
+                selected_row = sorted_df[sorted_df['Alert ID'] == selected_alert_id].iloc[0]
+                st.divider()
+                show_alert_detail(selected_row)
 
     @st.dialog("Top Supplier Details", width="large")
     def top_supplier_popup(supplier, subset):
         plants = ", ".join(subset['Plant'].unique())
         st.markdown(f"### {supplier}")
         st.markdown(f"**Plant(s):** {plants}")
-        disp = subset.sort_values('Risk Score', ascending=False)[['Tool', 'Plant', 'Alert Type', 'Severity', 'Frequency', 'Date/Time']].rename(columns={'Tool':'Tooling ID', 'Severity': 'Level'})
-        st.dataframe(disp, hide_index=True, use_container_width=True)
+        st.write("**Click on an alert below to view its detailed information.**")
+        
+        sorted_df = subset.sort_values('Risk Score', ascending=False)
+        disp = sorted_df[['Alert ID', 'Tool', 'Plant', 'Alert Type', 'Severity', 'Frequency', 'Date/Time']].rename(columns={'Tool':'Tooling ID', 'Severity': 'Level'})
+        
+        try:
+            event = st.dataframe(disp, hide_index=True, use_container_width=True, on_select="rerun", selection_mode="single-row")
+            if event.selection.rows:
+                selected_row = sorted_df.iloc[event.selection.rows[0]]
+                st.divider()
+                show_alert_detail(selected_row)
+        except Exception:
+            st.dataframe(disp, hide_index=True, use_container_width=True)
+            selected_alert_id = st.selectbox("Select Alert ID to view details:", sorted_df['Alert ID'].tolist())
+            if selected_alert_id:
+                selected_row = sorted_df[sorted_df['Alert ID'] == selected_alert_id].iloc[0]
+                st.divider()
+                show_alert_detail(selected_row)
 
     # ---------------------------------------------------------
     # FALLBACK BUTTONS FOR OLDER STREAMLIT VERSIONS
@@ -1690,19 +1796,19 @@ elif page == "Client Alerts Portal":
             ct_df = df[df['Alert Type'] == 'Cycle Time']
             render_interactive_bar(ct_df, "Cycle Time Deviations")
             with st.expander("Definitions & Thresholds"):
-                st.markdown("- **Level 1:** > 5% and ≤ 10% deviation\n- **Level 2:** > 10% and ≤ 15% deviation\n- **Level 3:** > 15% deviation")
+                st.markdown("- **Level 1:** ±5% < deviation ≤ ±10%\n- **Level 2:** ±10% < deviation ≤ ±15%\n- **Level 3:** ±15% < deviation ≤ ±20%")
             
             st.markdown("##### Low Run Rate Time Stability")
             rr_stab_df = df[df['Alert Type'] == 'Low Run Rate - Time Stability']
             render_interactive_bar(rr_stab_df, "Low Run Rate Time Stability")
             with st.expander("Definitions & Thresholds"):
-                st.markdown("- **Level 1:** 75% ≤ rate < 85%\n- **Level 2:** 60% ≤ rate < 75%\n- **Level 3:** < 60%")
+                st.markdown("- **Level 1:** 75% ≤ stability < 85%\n- **Level 2:** 60% ≤ stability < 75%\n- **Level 3:** 0% ≤ stability < 60%")
 
             st.markdown("##### Loss vs. Target Capacity")
             cr_tgt_df = df[df['Alert Type'] == 'Capacity Risk (Target)']
             render_interactive_bar(cr_tgt_df, "Loss vs. Target Capacity")
             with st.expander("Definitions & Thresholds"):
-                st.markdown("- **Level 1:** > 0% and ≤ 5% loss\n- **Level 2:** > 5% and ≤ 10% loss\n- **Level 3:** > 10% loss")
+                st.markdown("- **Level 1:** 0% < loss ≤ 5%\n- **Level 2:** 5% < loss ≤ 10%\n- **Level 3:** 10% < loss ≤ 100%")
 
             st.markdown("##### Operation Status")
             os_target_cats = ['Sensor Offline', 'Sensor Detached', 'Inactive']
@@ -1719,20 +1825,20 @@ elif page == "Client Alerts Portal":
             rr_eff_df = df[df['Alert Type'] == 'Low Run Rate - Shot Efficiency']
             render_interactive_bar(rr_eff_df, "Low Run Rate Shot Efficiency")
             with st.expander("Definitions & Thresholds"):
-                st.markdown("- **Level 1:** 75% ≤ rate < 85%\n- **Level 2:** 60% ≤ rate < 75%\n- **Level 3:** < 60%")
+                st.markdown("- **Level 1:** 75% ≤ efficiency < 85%\n- **Level 2:** 60% ≤ efficiency < 75%\n- **Level 3:** 0% ≤ efficiency < 60%")
 
             st.markdown("##### Loss vs. Optimal Capacity")
             cr_opt_df = df[df['Alert Type'] == 'Capacity Risk (Optimal)']
             render_interactive_bar(cr_opt_df, "Loss vs. Optimal Capacity")
             with st.expander("Definitions & Thresholds"):
-                st.markdown("- **Level 1:** > 0% and ≤ 5% loss\n- **Level 2:** > 5% and ≤ 10% loss\n- **Level 3:** > 10% loss")
+                st.markdown("- **Level 1:** 0% < loss ≤ 5%\n- **Level 2:** 5% < loss ≤ 10%\n- **Level 3:** 10% < loss ≤ 100%")
 
             st.markdown("##### Tooling End of Life")
             eol_df = df[df['Alert Type'].str.contains('EOL')]
             categories = ['Level 1', 'Level 2', 'Level 3']
             if MATPLOTLIB_AVAILABLE: render_interactive_donut(eol_df, "Tooling End of Life", categories, sev_colors)
             with st.expander("Definitions & Thresholds"):
-                st.markdown("- **Level 1:** Utilization 70%-80% OR Remaining ≤ 45 days\n- **Level 2:** Utilization 80%-90% OR Remaining ≤ 30 days\n- **Level 3:** Utilization > 90% OR Remaining ≤ 10 days")
+                st.markdown("- **Level 1:** Utilization Rate: 70% to 80% or Remaining Days: 30 to 45\n- **Level 2:** Utilization Rate: 80% to 90% or Remaining Days: 10 to 30\n- **Level 3:** Utilization Rate: 90% to MAX or Remaining Days: 0 to 10")
 
         st.divider()
 
