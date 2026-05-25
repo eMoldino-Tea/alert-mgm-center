@@ -1653,25 +1653,17 @@ elif page == "Client Alerts Portal":
             'Count': [counts.get(cat, 0) for cat in categories],
             'Color': [sev_colors.get(cat, '#3B82F6') for cat in categories]
         })
-        selection = alt.selection_point(fields=['Level'], name='select')
+        
         chart = alt.Chart(data).mark_bar().encode(
             x=alt.X('Level:N', sort=categories, axis=alt.Axis(labelAngle=0, title=None)),
             y=alt.Y('Count:Q', title='Tool Count'),
             color=alt.Color('Color:N', scale=None, legend=None),
-            opacity=alt.condition(selection, alt.value(1), alt.value(0.7)),
             tooltip=['Level', 'Count']
-        ).add_params(selection).properties(height=250)
+        ).properties(height=250)
         
         safe_label = label.replace(" ", "_").lower()
-        try:
-            event = st.altair_chart(chart, use_container_width=True, on_select="rerun", key=f"bar_{safe_label}")
-            if event and hasattr(event, 'selection') and 'select' in event.selection and event.selection['select']:
-                selected_level = event.selection['select'][0]['Level']
-                lvl_df = df_subset[df_subset['Severity'] == selected_level]
-                category_popup(label, selected_level, lvl_df)
-        except TypeError:
-            st.altair_chart(chart, use_container_width=True, key=f"bar_fb_{safe_label}")
-            render_breakdown_actions(label, df_subset, categories)
+        st.altair_chart(chart, use_container_width=True, key=f"bar_{safe_label}")
+        render_breakdown_actions(label, df_subset, categories)
 
     def render_interactive_donut(df_subset, label, categories, color_map, is_status=False):
         if is_status:
@@ -1690,28 +1682,16 @@ elif page == "Client Alerts Portal":
 
         domain = categories
         range_colors = [color_map.get(cat, '#3B82F6') for cat in categories]
-        selection = alt.selection_point(fields=['Category'], name='select')
         
         chart = alt.Chart(data).mark_arc(innerRadius=50).encode(
             theta=alt.Theta(field="Count", type="quantitative"),
             color=alt.Color(field="Category", type="nominal", scale=alt.Scale(domain=domain, range=range_colors), legend=alt.Legend(title=None)),
-            tooltip=['Category', 'Count'],
-            opacity=alt.condition(selection, alt.value(1), alt.value(0.7))
-        ).add_params(selection).properties(height=250)
+            tooltip=['Category', 'Count']
+        ).properties(height=250)
 
         safe_label = label.replace(" ", "_").lower()
-        try:
-            event = st.altair_chart(chart, use_container_width=True, on_select="rerun", key=f"donut_{safe_label}")
-            if event and hasattr(event, 'selection') and 'select' in event.selection and event.selection['select']:
-                selected_cat = event.selection['select'][0]['Category']
-                if is_status:
-                    lvl_df = df_subset[df_subset['Alert Type'].str.contains(selected_cat)]
-                else:
-                    lvl_df = df_subset[df_subset['Severity'] == selected_cat]
-                category_popup(label, selected_cat, lvl_df)
-        except TypeError:
-            st.altair_chart(chart, use_container_width=True, key=f"donut_fb_{safe_label}")
-            render_breakdown_actions(label, df_subset, categories, is_status=is_status)
+        st.altair_chart(chart, use_container_width=True, key=f"donut_{safe_label}")
+        render_breakdown_actions(label, df_subset, categories, is_status=is_status)
 
     # 6 Main Tabs for the Client Portal
     cat_tabs = st.tabs([
