@@ -1707,79 +1707,6 @@ elif page == "Client Alerts Portal":
                     st.divider()
                     show_alert_detail(selected_row)
 
-    @st.dialog("Top Tool Details", width="large")
-    def top_tool_popup(tool_id, subset):
-        supplier = subset['Supplier'].iloc[0] if not subset.empty else "N/A"
-        plant = subset['Plant'].iloc[0] if not subset.empty else "N/A"
-        st.markdown(f"### {tool_id}")
-        st.markdown(f"**Supplier:** {supplier} | **Plant:** {plant}")
-        st.write("**Click on an alert below to view its detailed information.**")
-        
-        sorted_df = subset.sort_values('Risk Score', ascending=False)
-        disp = sorted_df[['Alert ID', 'Alert Type', 'Severity', 'Frequency', 'Date/Time']].rename(columns={'Severity': 'Level'})
-        
-        try:
-            event = st.dataframe(disp, hide_index=True, use_container_width=True, on_select="rerun", selection_mode="single-row")
-            if event.selection.rows:
-                selected_row = sorted_df.iloc[event.selection.rows[0]]
-                st.divider()
-                show_alert_detail(selected_row)
-        except Exception:
-            st.dataframe(disp, hide_index=True, use_container_width=True)
-            selected_alert_id = st.selectbox("Select Alert ID to view details:", sorted_df['Alert ID'].tolist())
-            if selected_alert_id:
-                selected_row = sorted_df[sorted_df['Alert ID'] == selected_alert_id].iloc[0]
-                st.divider()
-                show_alert_detail(selected_row)
-
-    @st.dialog("Top Plant Details", width="large")
-    def top_plant_popup(plant, subset):
-        supplier = subset['Supplier'].iloc[0] if not subset.empty else "N/A"
-        st.markdown(f"### {plant}")
-        st.markdown(f"**Supplier:** {supplier}")
-        st.write("**Click on an alert below to view its detailed information.**")
-        
-        sorted_df = subset.sort_values('Risk Score', ascending=False)
-        disp = sorted_df[['Alert ID', 'Tool', 'Alert Type', 'Severity', 'Frequency', 'Date/Time']].rename(columns={'Tool':'Tooling ID', 'Severity': 'Level'})
-        
-        try:
-            event = st.dataframe(disp, hide_index=True, use_container_width=True, on_select="rerun", selection_mode="single-row")
-            if event.selection.rows:
-                selected_row = sorted_df.iloc[event.selection.rows[0]]
-                st.divider()
-                show_alert_detail(selected_row)
-        except Exception:
-            st.dataframe(disp, hide_index=True, use_container_width=True)
-            selected_alert_id = st.selectbox("Select Alert ID to view details:", sorted_df['Alert ID'].tolist())
-            if selected_alert_id:
-                selected_row = sorted_df[sorted_df['Alert ID'] == selected_alert_id].iloc[0]
-                st.divider()
-                show_alert_detail(selected_row)
-
-    @st.dialog("Top Supplier Details", width="large")
-    def top_supplier_popup(supplier, subset):
-        plants = ", ".join(subset['Plant'].unique())
-        st.markdown(f"### {supplier}")
-        st.markdown(f"**Plant(s):** {plants}")
-        st.write("**Click on an alert below to view its detailed information.**")
-        
-        sorted_df = subset.sort_values('Risk Score', ascending=False)
-        disp = sorted_df[['Alert ID', 'Tool', 'Plant', 'Alert Type', 'Severity', 'Frequency', 'Date/Time']].rename(columns={'Tool':'Tooling ID', 'Severity': 'Level'})
-        
-        try:
-            event = st.dataframe(disp, hide_index=True, use_container_width=True, on_select="rerun", selection_mode="single-row")
-            if event.selection.rows:
-                selected_row = sorted_df.iloc[event.selection.rows[0]]
-                st.divider()
-                show_alert_detail(selected_row)
-        except Exception:
-            st.dataframe(disp, hide_index=True, use_container_width=True)
-            selected_alert_id = st.selectbox("Select Alert ID to view details:", sorted_df['Alert ID'].tolist())
-            if selected_alert_id:
-                selected_row = sorted_df[sorted_df['Alert ID'] == selected_alert_id].iloc[0]
-                st.divider()
-                show_alert_detail(selected_row)
-
     # ---------------------------------------------------------
     # FALLBACK BUTTONS FOR OLDER STREAMLIT VERSIONS
     # ---------------------------------------------------------
@@ -2068,7 +1995,15 @@ elif page == "Client Alerts Portal":
         with c2: render_tab_export_button("tooling_eol", df_tab, "tooling_eol")
         render_tab_summary(df_tab, "tooling_eol")
         st.divider()
-        render_alert_hierarchy(df_tab, "EOL")
+
+        eol_tab1, eol_tab2, eol_tab3 = st.tabs(["Utilization Rate", "Remaining Days", "Combination (Whichever Comes First)"])
+        
+        with eol_tab1:
+            render_alert_hierarchy(df_tab[df_tab['Alert Type'].str.contains('Utilization', na=False)], "Utilization Rate")
+        with eol_tab2:
+            render_alert_hierarchy(df_tab[df_tab['Alert Type'].str.contains('Remaining Days', na=False)], "Remaining Days")
+        with eol_tab3:
+            render_alert_hierarchy(df_tab[df_tab['Alert Type'].str.contains('Combination', na=False)], "Combination")
         
     with cat_tabs[5]: # Operation Status
         df_tab = df[df['Alert Type'].str.contains('Operation Status')]
