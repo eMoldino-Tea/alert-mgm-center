@@ -1046,13 +1046,13 @@ if page == "Configuration Setup":
             if st.button("Save Cycle Time Settings", type="primary"):
                 log_admin_action("Cycle Time", user_filters, selected_server, selected_users, {"no_alert": ct_no_alert, "levels": ct_num, "limits": ct_limits, "freq": ct_freq})
 
-    # --- 2. RUN RATE ---
+    # --- 2. RUN Rate ---
     with tab2:
         st.subheader("Run Rate Alerts")
         st.write("Alerts based on Run Rate Shot Efficiency and Run Rate Time Stability")
         rr_enabled = st.toggle("Enable Run Rate Alerts", value=True, key="rr_toggle")
         if rr_enabled:
-            rr_tab1, rr_tab2 = st.tabs(["Low Run Rate Shot Efficiency", "Low Run Rate Time Stability"])
+            rr_tab1, rr_tab2 = st.tabs(["Run Rate Shot Efficiency", "Run Rate Time Stability"])
             def render_run_rate_logic(rr_type, prefix):
                 with st.container(border=True):
                     st.markdown("##### 'No Alert' Zone")
@@ -1596,6 +1596,117 @@ elif page == "Client Alerts Portal":
                 st.divider()
                 show_alert_detail(selected_row)
 
+    @st.dialog("Impacted Tools", width="large")
+    def impacted_tools_dialog(subset, prefix):
+        st.write("Select a Tool to view associated alerts.")
+        counts = subset['Tool'].value_counts().reset_index()
+        counts.columns = ['Tool', 'Alert Count']
+        
+        try:
+            event = st.dataframe(counts, hide_index=True, use_container_width=True, on_select="rerun", selection_mode="single-row", key=f"itd_{prefix}")
+            if event.selection.rows:
+                selected_item = counts.iloc[event.selection.rows[0]]['Tool']
+                st.divider()
+                st.markdown(f"#### Alerts for {selected_item}")
+                item_alerts = subset[subset['Tool'] == selected_item]
+                sorted_df = item_alerts.sort_values('Risk Score', ascending=False)
+                disp = sorted_df[['Alert ID', 'Alert Type', 'Severity', 'Frequency', 'Date/Time']].rename(columns={'Severity': 'Level'})
+                
+                event2 = st.dataframe(disp, hide_index=True, use_container_width=True, on_select="rerun", selection_mode="single-row", key=f"itd2_{prefix}_{selected_item}")
+                if event2.selection.rows:
+                    selected_row = sorted_df.iloc[event2.selection.rows[0]]
+                    st.divider()
+                    show_alert_detail(selected_row)
+        except Exception:
+            st.dataframe(counts, hide_index=True, use_container_width=True)
+            sel_item = st.selectbox("Select Tool to view details:", counts['Tool'].tolist(), key=f"sel_t_{prefix}")
+            if sel_item:
+                st.divider()
+                st.markdown(f"#### Alerts for {sel_item}")
+                item_alerts = subset[subset['Tool'] == sel_item]
+                sorted_df = item_alerts.sort_values('Risk Score', ascending=False)
+                disp = sorted_df[['Alert ID', 'Alert Type', 'Severity', 'Frequency', 'Date/Time']].rename(columns={'Severity': 'Level'})
+                st.dataframe(disp, hide_index=True, use_container_width=True)
+                sel_alert = st.selectbox("Select Alert ID to view details:", sorted_df['Alert ID'].tolist(), key=f"sel_ta_{prefix}_{sel_item}")
+                if sel_alert:
+                    selected_row = sorted_df[sorted_df['Alert ID'] == sel_alert].iloc[0]
+                    st.divider()
+                    show_alert_detail(selected_row)
+
+    @st.dialog("Impacted Plants", width="large")
+    def impacted_plants_dialog(subset, prefix):
+        st.write("Select a Plant to view associated alerts.")
+        counts = subset['Plant'].value_counts().reset_index()
+        counts.columns = ['Plant', 'Alert Count']
+        
+        try:
+            event = st.dataframe(counts, hide_index=True, use_container_width=True, on_select="rerun", selection_mode="single-row", key=f"ipd_{prefix}")
+            if event.selection.rows:
+                selected_item = counts.iloc[event.selection.rows[0]]['Plant']
+                st.divider()
+                st.markdown(f"#### Alerts for {selected_item}")
+                item_alerts = subset[subset['Plant'] == selected_item]
+                sorted_df = item_alerts.sort_values('Risk Score', ascending=False)
+                disp = sorted_df[['Alert ID', 'Alert Type', 'Severity', 'Frequency', 'Date/Time']].rename(columns={'Severity': 'Level'})
+                
+                event2 = st.dataframe(disp, hide_index=True, use_container_width=True, on_select="rerun", selection_mode="single-row", key=f"ipd2_{prefix}_{selected_item}")
+                if event2.selection.rows:
+                    selected_row = sorted_df.iloc[event2.selection.rows[0]]
+                    st.divider()
+                    show_alert_detail(selected_row)
+        except Exception:
+            st.dataframe(counts, hide_index=True, use_container_width=True)
+            sel_item = st.selectbox("Select Plant to view details:", counts['Plant'].tolist(), key=f"sel_p_{prefix}")
+            if sel_item:
+                st.divider()
+                st.markdown(f"#### Alerts for {sel_item}")
+                item_alerts = subset[subset['Plant'] == sel_item]
+                sorted_df = item_alerts.sort_values('Risk Score', ascending=False)
+                disp = sorted_df[['Alert ID', 'Alert Type', 'Severity', 'Frequency', 'Date/Time']].rename(columns={'Severity': 'Level'})
+                st.dataframe(disp, hide_index=True, use_container_width=True)
+                sel_alert = st.selectbox("Select Alert ID to view details:", sorted_df['Alert ID'].tolist(), key=f"sel_pa_{prefix}_{sel_item}")
+                if sel_alert:
+                    selected_row = sorted_df[sorted_df['Alert ID'] == sel_alert].iloc[0]
+                    st.divider()
+                    show_alert_detail(selected_row)
+
+    @st.dialog("Impacted Suppliers", width="large")
+    def impacted_suppliers_dialog(subset, prefix):
+        st.write("Select a Supplier to view associated alerts.")
+        counts = subset['Supplier'].value_counts().reset_index()
+        counts.columns = ['Supplier', 'Alert Count']
+        
+        try:
+            event = st.dataframe(counts, hide_index=True, use_container_width=True, on_select="rerun", selection_mode="single-row", key=f"isd_{prefix}")
+            if event.selection.rows:
+                selected_item = counts.iloc[event.selection.rows[0]]['Supplier']
+                st.divider()
+                st.markdown(f"#### Alerts for {selected_item}")
+                item_alerts = subset[subset['Supplier'] == selected_item]
+                sorted_df = item_alerts.sort_values('Risk Score', ascending=False)
+                disp = sorted_df[['Alert ID', 'Alert Type', 'Severity', 'Frequency', 'Date/Time']].rename(columns={'Severity': 'Level'})
+                
+                event2 = st.dataframe(disp, hide_index=True, use_container_width=True, on_select="rerun", selection_mode="single-row", key=f"isd2_{prefix}_{selected_item}")
+                if event2.selection.rows:
+                    selected_row = sorted_df.iloc[event2.selection.rows[0]]
+                    st.divider()
+                    show_alert_detail(selected_row)
+        except Exception:
+            st.dataframe(counts, hide_index=True, use_container_width=True)
+            sel_item = st.selectbox("Select Supplier to view details:", counts['Supplier'].tolist(), key=f"sel_s_{prefix}")
+            if sel_item:
+                st.divider()
+                st.markdown(f"#### Alerts for {sel_item}")
+                item_alerts = subset[subset['Supplier'] == sel_item]
+                sorted_df = item_alerts.sort_values('Risk Score', ascending=False)
+                disp = sorted_df[['Alert ID', 'Alert Type', 'Severity', 'Frequency', 'Date/Time']].rename(columns={'Severity': 'Level'})
+                st.dataframe(disp, hide_index=True, use_container_width=True)
+                sel_alert = st.selectbox("Select Alert ID to view details:", sorted_df['Alert ID'].tolist(), key=f"sel_sa_{prefix}_{sel_item}")
+                if sel_alert:
+                    selected_row = sorted_df[sorted_df['Alert ID'] == sel_alert].iloc[0]
+                    st.divider()
+                    show_alert_detail(selected_row)
+
     @st.dialog("Top Tool Details", width="large")
     def top_tool_popup(tool_id, subset):
         supplier = subset['Supplier'].iloc[0] if not subset.empty else "N/A"
@@ -1729,6 +1840,24 @@ elif page == "Client Alerts Portal":
         safe_label = label.replace(" ", "_").lower()
         st.altair_chart(chart, use_container_width=True, key=f"donut_{safe_label}")
         render_breakdown_actions(label, df_subset, categories, is_status=is_status)
+
+    def render_tab_summary(tab_df, tab_name_prefix):
+        st.markdown("### Category Summary")
+        kpi1, kpi2, kpi3, kpi4 = st.columns(4)
+        with kpi1:
+            st.markdown(f"<div class='metric-card'><div class='metric-title'>Total Active Alerts</div><div class='metric-value'>{len(tab_df)}</div></div>", unsafe_allow_html=True)
+        with kpi2:
+            st.markdown(f"<div class='metric-card' style='margin-bottom: 5px;'><div class='metric-title'>Impacted Tools</div><div class='metric-value'>{tab_df['Tool'].nunique()}</div></div>", unsafe_allow_html=True)
+            if st.button("View Tools", key=f"btn_tools_{tab_name_prefix}", use_container_width=True):
+                impacted_tools_dialog(tab_df, tab_name_prefix)
+        with kpi3:
+            st.markdown(f"<div class='metric-card' style='margin-bottom: 5px;'><div class='metric-title'>Impacted Plants</div><div class='metric-value'>{tab_df['Plant'].nunique()}</div></div>", unsafe_allow_html=True)
+            if st.button("View Plants", key=f"btn_plants_{tab_name_prefix}", use_container_width=True):
+                impacted_plants_dialog(tab_df, tab_name_prefix)
+        with kpi4:
+            st.markdown(f"<div class='metric-card' style='margin-bottom: 5px;'><div class='metric-title'>Impacted Suppliers</div><div class='metric-value'>{tab_df['Supplier'].nunique()}</div></div>", unsafe_allow_html=True)
+            if st.button("View Suppliers", key=f"btn_suppliers_{tab_name_prefix}", use_container_width=True):
+                impacted_suppliers_dialog(tab_df, tab_name_prefix)
 
     # 6 Main Tabs for the Client Portal
     cat_tabs = st.tabs([
@@ -1903,40 +2032,48 @@ elif page == "Client Alerts Portal":
         df_tab = df[df['Alert Type'] == 'Cycle Time']
         c1, c2 = st.columns([8, 2])
         with c2: render_tab_export_button("cycle_time", df_tab, "cycle_time")
+        render_tab_summary(df_tab, "cycle_time")
+        st.divider()
         render_alert_hierarchy(df_tab, "Cycle Time")
         
     with cat_tabs[2]: # Run Rate
         df_tab = df[df['Alert Type'].str.contains('Run Rate')]
         c1, c2 = st.columns([8, 2])
         with c2: render_tab_export_button("run_rate", df_tab, "run_rate")
-        
-        st.markdown("### Run Rate Shot Efficiency")
-        render_alert_hierarchy(df[df['Alert Type'] == 'Low Run Rate - Shot Efficiency'], "Run Rate Shot Efficiency")
+        render_tab_summary(df_tab, "run_rate")
         st.divider()
-        st.markdown("### Run Rate Time Stability")
-        render_alert_hierarchy(df[df['Alert Type'] == 'Low Run Rate - Time Stability'], "Run Rate Time Stability")
+        
+        rr_tab1, rr_tab2 = st.tabs(["Run Rate Shot Efficiency", "Run Rate Time Stability"])
+        with rr_tab1:
+            render_alert_hierarchy(df[df['Alert Type'] == 'Low Run Rate - Shot Efficiency'], "Run Rate Shot Efficiency")
+        with rr_tab2:
+            render_alert_hierarchy(df[df['Alert Type'] == 'Low Run Rate - Time Stability'], "Run Rate Time Stability")
         
     with cat_tabs[3]: # Capacity Risk
         df_tab = df[df['Alert Type'].str.contains('Capacity Risk')]
         c1, c2 = st.columns([8, 2])
         with c2: render_tab_export_button("capacity_risk", df_tab, "capacity_risk")
-
-        st.markdown("### Loss Parts vs Optimal Capacity")
-        render_alert_hierarchy(df[df['Alert Type'] == 'Capacity Risk (Optimal)'], "Optimal Capacity")
+        render_tab_summary(df_tab, "capacity_risk")
         st.divider()
-        st.markdown("### Loss Parts vs Target Capacity")
-        render_alert_hierarchy(df[df['Alert Type'] == 'Capacity Risk (Target)'], "Target Capacity")
+
+        cr_tab1, cr_tab2 = st.tabs(["Loss Parts vs Optimal Capacity", "Loss Parts vs Target Capacity"])
+        with cr_tab1:
+            render_alert_hierarchy(df[df['Alert Type'] == 'Capacity Risk (Optimal)'], "Optimal Capacity")
+        with cr_tab2:
+            render_alert_hierarchy(df[df['Alert Type'] == 'Capacity Risk (Target)'], "Target Capacity")
         
     with cat_tabs[4]: # Tooling EOL
         df_tab = df[df['Alert Type'].str.contains('EOL')]
         c1, c2 = st.columns([8, 2])
         with c2: render_tab_export_button("tooling_eol", df_tab, "tooling_eol")
-
+        render_tab_summary(df_tab, "tooling_eol")
+        st.divider()
         render_alert_hierarchy(df_tab, "EOL")
         
     with cat_tabs[5]: # Operation Status
         df_tab = df[df['Alert Type'].str.contains('Operation Status')]
         c1, c2 = st.columns([8, 2])
         with c2: render_tab_export_button("operation_status", df_tab, "operation_status")
-
+        render_tab_summary(df_tab, "operation_status")
+        st.divider()
         render_alert_hierarchy(df_tab, "Operation Status")
