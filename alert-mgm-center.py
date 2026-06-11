@@ -236,9 +236,15 @@ def format_df_for_client_export(df_sub, a_type):
     elif "Capacity Risk" in a_type:
         display_cols["Metric_1"] = "% of Loss"
     elif "EOL" in a_type:
-        display_cols["Metric_1"] = "Utilization Rate"
-        if a_type in ["Tooling EOL (Remaining Days)", "Tooling EOL (Combination)"]:
-            display_cols["Metric_2"] = "Remaining Life (Days)"
+        if "Remaining Days" in a_type:
+            display_cols["Metric_1"] = "Remaining Days"
+        elif "Combination" in a_type:
+            type_df["Utilization Rate / Remaining Days"] = type_df.apply(
+                lambda row: f"Utilization Rate: {row['Metric_1']}\nRemaining Days: {row['Metric_2']}" if pd.notna(row.get('Metric_2')) and str(row.get('Metric_2')).strip() else f"Utilization Rate: {row['Metric_1']}\nRemaining Days: N/A", axis=1
+            )
+            display_cols["Utilization Rate / Remaining Days"] = "Utilization Rate / Remaining Days"
+        else:
+            display_cols["Metric_1"] = "Utilization Rate"
     elif "Operation Status" in a_type:
         if "Severity" in display_cols:
             del display_cols["Severity"]
@@ -1437,9 +1443,15 @@ elif page == "Client Alerts Portal":
                     elif "Capacity Risk" in a_type: 
                         display_cols["Metric_1"] = "% of Loss"
                     elif "EOL" in a_type: 
-                        display_cols["Metric_1"] = "Utilization Rate"
-                        if a_type in ["Tooling EOL (Remaining Days)", "Tooling EOL (Combination)"]:
-                            display_cols["Metric_2"] = "Remaining Life (Days)"
+                        if "Remaining Days" in a_type:
+                            display_cols["Metric_1"] = "Remaining Days"
+                        elif "Combination" in a_type:
+                            type_df["Utilization Rate / Remaining Days"] = type_df.apply(
+                                lambda row: f"Utilization Rate: {row['Metric_1']}\nRemaining Days: {row['Metric_2']}" if pd.notna(row.get('Metric_2')) and str(row.get('Metric_2')).strip() else f"Utilization Rate: {row['Metric_1']}\nRemaining Days: N/A", axis=1
+                            )
+                            display_cols["Utilization Rate / Remaining Days"] = "Utilization Rate / Remaining Days"
+                        else:
+                            display_cols["Metric_1"] = "Utilization Rate"
                     elif "Operation Status" in a_type:
                         if "Severity" in display_cols:
                             del display_cols["Severity"]
