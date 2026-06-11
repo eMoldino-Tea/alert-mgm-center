@@ -55,6 +55,8 @@ if 'client_alerts_db' not in st.session_state:
         ("Capacity Risk (Optimal)", [("Level 1", 80, "4%"), ("Level 2", 12, "10%"), ("Level 3", 3, "18%")]),
         ("Capacity Risk (Target)", [("Level 1", 75, "3%"), ("Level 2", 18, "8%"), ("Level 3", 7, "15%")]),
         ("Tooling EOL (Utilization)", [("Level 1", 40, "75%"), ("Level 2", 10, "85%"), ("Level 3", 5, "95%")]),
+        ("Tooling EOL (Remaining Days)", [("Level 1", 15, "42", ""), ("Level 2", 8, "28", ""), ("Level 3", 3, "8", "")]),
+        ("Tooling EOL (Combination)", [("Level 1", 10, "78%", "40"), ("Level 2", 5, "88%", "25"), ("Level 3", 2, "96%", "8")]),
         ("Operation Status (Sensor Offline)", [("Status", 7, "2026-04-28 08:00:00")]),
         ("Operation Status (Sensor Detached)", [("Status", 2, "2026-04-28 09:00:00")]),
         ("Operation Status (Inactive)", [("Status", 19, "2026-04-28 10:00:00")])
@@ -66,6 +68,7 @@ if 'client_alerts_db' not in st.session_state:
             sev = row_config[0]
             count = row_config[1]
             metric = row_config[2]
+            metric_2 = row_config[3] if len(row_config) > 3 else ""
             for _ in range(count):
                 mock_data.append({
                     "Alert ID": f"ALT-{alert_id_counter}",
@@ -81,12 +84,51 @@ if 'client_alerts_db' not in st.session_state:
                     "Severity": sev,
                     "Alert Type": a_type,
                     "Metric_1": metric,
-                    "Metric_2": "",
+                    "Metric_2": metric_2,
                     "Status": "Open",
                     "Owner": "Unassigned"
                 })
                 alert_id_counter += 1
     st.session_state.client_alerts_db = pd.DataFrame(mock_data)
+
+# --- PATCH FOR EXISTING SESSIONS TO INJECT MISSING EOL MOCK DATA ---
+if 'client_alerts_db' in st.session_state:
+    db = st.session_state.client_alerts_db
+    if not db['Alert Type'].isin(['Tooling EOL (Remaining Days)']).any():
+        extra_mock = []
+        alert_id_counter = int(db['Alert ID'].str.extract(r'ALT-(\d+)').astype(int).max().iloc[0]) + 1
+        extra_dists = [
+            ("Tooling EOL (Remaining Days)", [("Level 1", 12, "42", ""), ("Level 2", 6, "28", ""), ("Level 3", 2, "8", "")]),
+            ("Tooling EOL (Combination)", [("Level 1", 8, "78%", "40"), ("Level 2", 4, "88%", "25"), ("Level 3", 1, "96%", "8")])
+        ]
+        for a_type, dist in extra_dists:
+            for row_config in dist:
+                sev = row_config[0]
+                count = row_config[1]
+                m1 = row_config[2]
+                m2 = row_config[3] if len(row_config) > 3 else ""
+                for _ in range(count):
+                    extra_mock.append({
+                        "Alert ID": f"ALT-{alert_id_counter}",
+                        "Alert Name": f"{a_type.split('(')[0].strip()} Alert",
+                        "Date/Time": (datetime.datetime(2026, 4, 28, 10, 0) - datetime.timedelta(days=random.randint(0, 5), hours=random.randint(1,20))).strftime("%Y-%m-%d %H:%M:%S"),
+                        "Frequency": random.choice(["Hourly", "Daily", "Weekly", "Monthly"]),
+                        "Tool": f"Tool_{random.choice('ABCDEFGH')}",
+                        "Part": f"Part 10{random.randint(1,9)}",
+                        "Supplier": random.choice(["Supplier X", "Supplier Y", "Supplier Z"]),
+                        "Plant": random.choice(["Plant 1", "Plant 2", "Plant 3"]),
+                        "Tooling Type": random.choice(["Injection", "Stamping", "Die Casting"]),
+                        "OEM Division": random.choice(["Div A", "Div B", "Div C"]),
+                        "Severity": sev,
+                        "Alert Type": a_type,
+                        "Metric_1": m1,
+                        "Metric_2": m2,
+                        "Status": "Open",
+                        "Owner": "Unassigned"
+                    })
+                    alert_id_counter += 1
+        if extra_mock:
+            st.session_state.client_alerts_db = pd.concat([db, pd.DataFrame(extra_mock)], ignore_index=True)
 
 if 'client_portal_view' not in st.session_state:
     st.session_state.client_portal_view = "list"
@@ -1586,8 +1628,15 @@ elif page == "Client Alerts Portal":
             display_cols["Metric_1"] = "Run Rate Time Stability"
         elif a_type_label in ["Loss vs. Optimal Capacity", "Loss vs. Target Capacity"]:
             display_cols["Metric_1"] = "% of Loss"
-        elif a_type_label == "Tooling End of Life":
+        elif a_type_label in ["Tooling End of Life", "Utilization Rate"]:
             display_cols["Metric_1"] = "Utilization Rate"
+        elif a_type_label == "Remaining Days":
+            display_cols["Metric_1"] = "Remaining Days"
+        elif a_type_label == "Combination":
+            level_df["Utilization Rate / Remaining Days"] = level_df.apply(
+                lambda row: f"Utilization Rate: {row['Metric_1']}\nRemaining Days: {row['Metric_2']}" if pd.notna(row.get('Metric_2')) and str(row.get('Metric_2')).strip() else f"Utilization Rate: {row['Metric_1']}\nRemaining Days: N/A", axis=1
+            )
+            display_cols["Utilization Rate / Remaining Days"] = "Utilization Rate / Remaining Days"
 
         display_cols["Date/Time"] = "Date & Time" 
 
